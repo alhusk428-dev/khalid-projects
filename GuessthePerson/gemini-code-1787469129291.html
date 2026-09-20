@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guess the Person - Mind Reader Genie</title>
+
+  <!-- Open Graph Meta Tags for Discord & Social Media Sharing -->
+  <meta property="og:title" content="Guess the Person - Mind Reader Genie" />
+  <meta property="og:description" content="Think of any celebrity, streamer, athlete, or character and let the genie read your mind!" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/IShowSpeed_2023.jpg/440px-IShowSpeed_2023.jpg" />
+
+  <style>
+    :root {
+      --primary-gold: #fbbf24;
+      --secondary-gold: #d97706;
+      --genie-purple: #3b0764;
+      --speech-bg: #ffffff;
+      --card-bg: rgba(15, 23, 42, 0.85);
+      --glass-border: rgba(255, 215, 0, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 20%, #2e1065 0%, #0f172a 70%, #020617 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    /* Main Stage */
+    .stage {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 2px solid var(--glass-border);
+      box-shadow: 0 0 50px rgba(147, 51, 234, 0.3), inset 0 0 20px rgba(251, 191, 36, 0.1);
+      border-radius: 32px;
+      width: 100%;
+      max-width: 900px;
+      padding: 36px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    /* Top Navigation Header */
+    .header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .brand-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #fef08a 0%, #fbbf24 50%, #f59e0b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+    }
+
+    .q-pill {
+      background: linear-gradient(135deg, #4c1d95, #3b0764);
+      border: 1px solid var(--primary-gold);
+      color: var(--primary-gold);
+      font-weight: 800;
+      font-size: 1.1rem;
+      padding: 6px 18px;
+      border-radius: 999px;
+      box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+    }
+
+    /* Confidence Bar Container */
+    .confidence-container {
+      width: 100%;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .confidence-label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--primary-gold);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .confidence-track {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .confidence-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8 0%, #a855f7 50%, #fbbf24 100%);
+      transition: width 0.4s ease;
+      border-radius: 999px;
+    }
+
+    /* Character & Speech Container */
+    .character-stage {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      width: 100%;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+      .character-stage {
+        flex-direction: column;
+      }
+    }
+
+    /* Genie Graphic Avatar */
+    .genie-frame {
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #a855f7 0%, #6b21a8 60%, #3b0764 100%);
+      border: 4px solid var(--primary-gold);
+      box-shadow: 0 0 30px rgba(168, 85, 247, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      flex-shrink: 0;
+      animation: genieFloat 4s ease-in-out infinite;
+    }
+
+    .genie-portrait {
+      font-size: 6rem;
+      filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.5));
+    }
+
+    @keyframes genieFloat {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-12px) rotate(2deg); }
+    }
+
+    /* Speech Bubble */
+    .speech-bubble {
+      position: relative;
+      background: var(--speech-bg);
+      color: #0f172a;
+      border-radius: 28px;
+      padding: 32px;
+      flex-grow: 1;
+      width: 100%;
+      min-height: 170px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .speech-bubble::before {
+      content: '';
+      position: absolute;
+      left: -20px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-width: 12px 20px 12px 0;
+      border-style: solid;
+      border-color: transparent var(--speech-bg) transparent transparent;
+    }
+
+    @media (max-width: 768px) {
+      .speech-bubble::before {
+        display: none;
+      }
+    }
+
+    .question-prompt {
+      font-size: 1.85rem;
+      font-weight: 800;
+      line-height: 1.3;
+      color: #0f172a;
+    }
+
+    /* Hint Chip */
+    .hint-chip {
+      margin-top: 14px;
+      align-self: flex-start;
+      background: #f1f5f9;
+      border-left: 4px solid var(--secondary-gold);
+      color: #334155;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 8px;
+    }
+
+    /* Guess Result Card with Image */
+    .guess-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .person-img-frame {
+      width: 180px;
+      height: 180px;
+      border-radius: 20px;
+      border: 4px solid var(--primary-gold);
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      background: #0f172a;
+    }
+
+    .person-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Answer Button Stack */
+    .answers-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 620px;
+    }
+
+    .choice-btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .choice-btn:hover {
+      transform: translateY(-2px) scale(1.01);
+      filter: brightness(1.15);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .choice-btn:active {
+      transform: translateY(1px);
+    }
+
+    /* Gradient Choices */
+    .btn-yes { background: linear-gradient(180deg, #22c55e 0%, #15803d 100%); }
+    .btn-probably { background: linear-gradient(180deg, #0ea5e9 0%, #0369a1 100%); }
+    .btn-unknown { background: linear-gradient(180deg, #64748b 0%, #334155 100%); }
+    .btn-probablynot { background: linear-gradient(180deg, #f97316 0%, #c2410c 100%); }
+    .btn-no { background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%); }
+
+    /* Result Action Buttons */
+    .result-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    .btn-continue {
+      background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+      border-color: var(--primary-gold);
+    }
+
+    .btn-playagain {
+      background: linear-gradient(180deg, #a855f7 0%, #6b21a8 100%);
+    }
+
+    .btn-start {
+      background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+      color: #0f172a;
+      text-shadow: none;
+      font-size: 1.4rem;
+    }
+
+    /* Defeat Form Styling */
+    .defeat-box {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+      background: rgba(15, 23, 42, 0.9);
+      color: #ffffff;
+      font-size: 1.1rem;
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: var(--primary-gold);
+      box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="stage">
+    
+    <!-- Top Bar -->
+    <div class="header">
+      <div class="brand-title">🔮 Guess the Person</div>
+      <div class="q-pill" id="q-pill">Question #1</div>
+    </div>
+
+    <!-- Genie Confidence Bar -->
+    <div class="confidence-container" id="confidence-bar-wrap">
+      <div class="confidence-label">
+        <span>Genie Mind-Reading Power</span>
+        <span id="confidence-text">0%</span>
+      </div>
+      <div class="confidence-track">
+        <div class="confidence-fill" id="confidence-fill"></div>
+      </div>
+    </div>
+
+    <!-- Character & Speech Bubble Stage -->
+    <div class="character-stage">
+      <div class="genie-frame">
+        <div class="genie-portrait" id="genie-emoji">🧞‍♂️</div>
+      </div>
+
+      <div class="speech-bubble">
+        <div class="question-prompt" id="prompt-text">
+          Think of a real or fictional character, creator, or athlete. I will read your mind!
+        </div>
+        
+        <div class="hint-chip hidden" id="hint-chip">
+          💡 <span id="hint-text">---</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Panel -->
+    <div id="start-panel" class="answers-stack">
+      <button class="choice-btn btn-start" id="btn-start">Start Mind Reading ➔</button>
+    </div>
+
+    <!-- Answer Buttons -->
+    <div id="game-panel" class="answers-stack hidden">
+      <button class="choice-btn btn-yes" id="btn-yes">Yes</button>
+      <button class="choice-btn btn-probably" id="btn-probably">Probably</button>
+      <button class="choice-btn btn-unknown" id="btn-unknown">Don't Know</button>
+      <button class="choice-btn btn-probablynot" id="btn-probablynot">Probably Not</button>
+      <button class="choice-btn btn-no" id="btn-no">No</button>
+    </div>
+
+    <!-- Guess Result Panel -->
+    <div id="result-panel" class="result-stack hidden">
+      <button class="choice-btn btn-continue" id="btn-continue">No, keep guessing! (Ask more questions) ➔</button>
+      <button class="choice-btn btn-playagain" id="btn-again">Yes! Play Again ↺</button>
+    </div>
+
+    <!-- Defeat Form Panel -->
+    <div id="defeat-panel" class="defeat-box hidden">
+      <input type="text" id="input-name" class="text-input" placeholder="Who were you thinking of?" />
+      <button class="choice-btn btn-start" id="btn-submit-learned">Teach the Genie 🧠</button>
+    </div>
+
+  </div>
+
+  <script>
+    // Audio Synth Engine (Zero External Audio Assets Required)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playTone(freq, type, duration) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function soundClick() { playTone(440, 'sine', 0.08); }
+    function soundWin() { playTone(587.33, 'triangle', 0.2); setTimeout(() => playTone(880, 'triangle', 0.4), 150); }
+    function soundLoss() { playTone(220, 'sawtooth', 0.3); }
+
+    // Dynamic Wikipedia Image Fetcher
+    async function getWikipediaImage(personName) {
+      try {
+        const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(personName)}`);
+        const data = await res.json();
+        return data.thumbnail ? data.thumbnail.source : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Candidates Database
+    const baseCandidates = [
+      // Streamers & Creators
+      { name: "IShowSpeed", creator:1, twitch:1, energetic:1, barking:1, male:1, hint: "Famous for barking, wild energy, and soccer streams." },
+      { name: "Kai Cenat", creator:1, twitch:1, subathon:1, amp:1, male:1, hint: "Broke stream records with giant subathons and celebrity guests." },
+      { name: "MrBeast", creator:1, youtube:1, rich:1, challenges:1, male:1, hint: "Famous for giant budget challenge videos and cash giveaways." },
+      { name: "CaseOh", creator:1, twitch:1, gaming:1, food_jokes:1, male:1, hint: "Popular Twitch streamer known for horror games and food jokes." },
+      { name: "PewDiePie", creator:1, youtube:1, swedish:1, gaming:1, male:1, hint: "Swedish YouTube icon who held the subscriber crown for years." },
+
+      // Athletes
+      { name: "Lionel Messi", athlete:1, soccer:1, world_cup:1, argentina:1, male:1, hint: "Argentine World Cup winner with 8 Ballon d'Or awards." },
+      { name: "Cristiano Ronaldo", athlete:1, soccer:1, portugal:1, cr7:1, male:1, hint: "Portuguese football legend famous for his SIUU celebration." },
+      { name: "LeBron James", athlete:1, basketball:1, nba:1, lakers:1, male:1, hint: "NBA's all-time leading scorer known as The King." },
+
+      // Actors & Musicians
+      { name: "Dwayne Johnson", actor:1, wwe:1, bald:1, male:1, hint: "Former WWE champion turned action movie superstar." },
+      { name: "Taylor Swift", musician:1, pop:1, female:1, eras_tour:1, hint: "Pop superstar who shattered records with The Eras Tour." }
+    ];
+
+    // Questions Database
+    const questionDatabase = [
+      { id: "creator", text: "Is your character an online content creator, streamer, or YouTuber?" },
+      { id: "athlete", text: "Is your character a professional athlete?" },
+      { id: "actor", text: "Is your character a famous movie actor or actress?" },
+      { id: "musician", text: "Is your character a musician, singer, or rapper?" },
+      { id: "female", text: "Is your character female?" },
+      { id: "male", text: "Is your character male?" },
+      { id: "twitch", text: "Are they famous for livestreaming on Twitch or Kick?" },
+      { id: "youtube", text: "Are they known for main videos on YouTube?" },
+      { id: "soccer", text: "Do they play professional soccer (football)?" },
+      { id: "basketball", text: "Do they play professional basketball in the NBA?" },
+      { id: "energetic", text: "Are they known for wild, high-energy streams or outbursts?" },
+      { id: "barking", text: "Have they ever barked at people or cameras online?" },
+      { id: "rich", text: "Are they famous for giving away large amounts of cash?" },
+      { id: "food_jokes", text: "Do fans constantly make food or weight jokes about them?" },
+      { id: "world_cup", text: "Have they won the FIFA World Cup?" },
+      { id: "eras_tour", text: "Did they perform on The Eras Tour?" }
+    ];
+
+    let candidates = [];
+    let candidateScores = [];
+    let askedQuestions = [];
+    let questionCount = 0;
+    let currentQ = null;
+    let excludedNames = [];
+
+    // Load custom learned candidates from localStorage
+    function loadCandidates() {
+      const stored = localStorage.getItem('custom_candidates');
+      const customCandidates = stored ? JSON.parse(stored) : [];
+      candidates = [...baseCandidates, ...customCandidates];
+    }
+
+    function initGame() {
+      soundClick();
+      loadCandidates();
+      candidateScores = candidates.map(c => ({ person: c, score: 0 }));
+      askedQuestions = [];
+      questionCount = 0;
+      excludedNames = [];
+
+      document.getElementById('start-panel').classList.add('hidden');
+      document.getElementById('result-panel').classList.add('hidden');
+      document.getElementById('defeat-panel').classList.add('hidden');
+      document.getElementById('game-panel').classList.remove('hidden');
+      document.getElementById('btn-continue').classList.remove('hidden');
+      document.getElementById('genie-emoji').innerText = "🧞‍♂️";
+
+      updateConfidence(0);
+      askNextQuestion();
+    }
+
+    function updateConfidence(percent) {
+      const val = Math.min(100, Math.max(0, Math.round(percent)));
+      document.getElementById('confidence-fill').style.width = `${val}%`;
+      document.getElementById('confidence-text').innerText = `${val}%`;
+    }
+
+    function selectBestQuestion() {
+      const remainingQ = questionDatabase.filter(q => !askedQuestions.includes(q.id));
+      if (remainingQ.length === 0) return null;
+
+      const activeCandidates = candidateScores.filter(cs => !excludedNames.includes(cs.person.name));
+      if (activeCandidates.length === 0) return null;
+
+      let bestQ = remainingQ[0];
+      let lowestDiff = 999;
+
+      remainingQ.forEach(q => {
+        let matchCount = 0;
+        activeCandidates.forEach(cs => {
+          if (cs.person[q.id] === 1) matchCount++;
+        });
+
+        let diff = Math.abs((activeCandidates.length / 2) - matchCount);
+        if (diff < lowestDiff) {
+          lowestDiff = diff;
+          bestQ = q;
+        }
+      });
+
+      return bestQ;
+    }
+
+    function askNextQuestion() {
+      const activeCandidates = candidateScores
+        .filter(cs => !excludedNames.includes(cs.person.name))
+        .sort((a, b) => b.score - a.score);
+
+      if (activeCandidates.length > 0) {
+        const topScore = activeCandidates[0].score;
+        const confPercent = Math.min(100, Math.max(10, (topScore + 2) * 20));
+        updateConfidence(confPercent);
+      }
+
+      if (
+        activeCandidates.length === 1 || 
+        (questionCount >= 4 && activeCandidates.length > 0 && (activeCandidates[0].score - (activeCandidates[1]?.score || 0) >= 2.5))
+      ) {
+        showGuess(activeCandidates[0].person);
+        return;
+      }
+
+      currentQ = selectBestQuestion();
+
+      if (!currentQ) {
+        if (activeCandidates.length > 0) {
+          showGuess(activeCandidates[0].person);
+        } else {
+          showDefeat();
+        }
+        return;
+      }
+
+      askedQuestions.push(currentQ.id);
+      questionCount++;
+
+      document.getElementById('q-pill').innerText = `Question #${questionCount}`;
+      document.getElementById('prompt-text').innerText = currentQ.text;
+
+      const hintChip = document.getElementById('hint-chip');
+      if (questionCount >= 3 && activeCandidates.length > 0 && activeCandidates[0].person.hint) {
+        document.getElementById('hint-text').innerText = activeCandidates[0].person.hint;
+        hintChip.classList.remove('hidden');
+      } else {
+        hintChip.classList.add('hidden');
+      }
+    }
+
+    function submitAnswer(weight) {
+      soundClick();
+      if (!currentQ) return;
+
+      candidateScores.forEach(cs => {
+        const hasTrait = cs.person[currentQ.id] === 1;
+
+        if (weight === 1.0) { // Yes
+          if (hasTrait) cs.score += 1.0;
+          else cs.score -= 2.0;
+        } else if (weight === 0.75) { // Probably
+          if (hasTrait) cs.score += 0.6;
+          else cs.score -= 1.0;
+        } else if (weight === 0.5) { // Neutral
+        } else if (weight === 0.25) { // Probably Not
+          if (hasTrait) cs.score -= 1.0;
+          else cs.score += 0.4;
+        } else if (weight === 0.0) { // No
+          if (hasTrait) cs.score -= 2.0;
+          else cs.score += 0.6;
+        }
+      });
+
+      askNextQuestion();
+    }
+
+    async function showGuess(person) {
+      soundWin();
+      updateConfidence(100);
+      document.getElementById('genie-emoji').innerText = "🔮";
+      document.getElementById('game-panel').classList.add('hidden');
+      document.getElementById('result-panel').classList.remove('hidden');
+      document.getElementById('hint-chip').classList.add('hidden');
+
+      // Fetch real photo dynamically via Wikipedia API
+      document.getElementById('prompt-text').innerHTML = `
+        <div class="guess-card">
+          <div>I think of...</div>
+          <div class="person-img-frame">
+            <div style="padding: 20px; color: #94a3b8; font-size: 0.9rem;">Loading real photo...</div>
+          </div>
+          <div style="color: #d97706; font-size: 2rem; font-weight: 900;">${person.name}</div>
+        </div>
+      `;
+
+      const realPhoto = await getWikipediaImage(person.name);
+      const fallbackImg = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/IShowSpeed_2023.jpg/440px-IShowSpeed_2023.jpg";
+      const finalImgSrc = realPhoto || fallbackImg;
+
+      document.getElementById('prompt-text').innerHTML = `
+        <div class="guess-card">
+          <div>I think of...</div>
+          <div class="person-img-frame">
+            <img class="person-img" src="${finalImgSrc}" alt="${person.name}" />
+          </div>
+          <div style="color: #d97706; font-size: 2rem; font-weight: 900;">${person.name}</div>
+        </div>
+      `;
+    }
+
+    function keepGuessing() {
+      soundClick();
+      const activeCandidates = candidateScores
+        .filter(cs => !excludedNames.includes(cs.person.name))
+        .sort((a, b) => b.score - a.score);
+
+      if (activeCandidates.length > 0) {
+        excludedNames.push(activeCandidates[0].person.name);
+      }
+
+      document.getElementById('genie-emoji').innerText = "🤔";
+      document.getElementById('result-panel').classList.add('hidden');
+      document.getElementById('game-panel').classList.remove('hidden');
+
+      askNextQuestion();
+    }
+
+    function showDefeat() {
+      soundLoss();
+      updateConfidence(0);
+      document.getElementById('genie-emoji').innerText = "🧙‍♂️";
+      document.getElementById('game-panel').classList.add('hidden');
+      document.getElementById('result-panel').classList.add('hidden');
+      document.getElementById('defeat-panel').classList.remove('hidden');
+
+      document.getElementById('prompt-text').innerText = "You win! You defeated my mind reading powers! Who were you thinking of?";
+    }
+
+    function saveLearnedCharacter() {
+      soundClick();
+      const inputVal = document.getElementById('input-name').value.trim();
+      if (inputVal) {
+        const stored = localStorage.getItem('custom_candidates');
+        const customCandidates = stored ? JSON.parse(stored) : [];
+        
+        customCandidates.push({
+          name: inputVal,
+          hint: "Custom user-taught character!"
+        });
+
+        localStorage.setItem('custom_candidates', JSON.stringify(customCandidates));
+      }
+
+      initGame();
+    }
+
+    // Event Listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btn-start').addEventListener('click', initGame);
+      document.getElementById('btn-again').addEventListener('click', initGame);
+      document.getElementById('btn-continue').addEventListener('click', keepGuessing);
+      document.getElementById('btn-submit-learned').addEventListener('click', saveLearnedCharacter);
+
+      document.getElementById('btn-yes').addEventListener('click', () => submitAnswer(1.0));
+      document.getElementById('btn-probably').addEventListener('click', () => submitAnswer(0.75));
+      document.getElementById('btn-unknown').addEventListener('click', () => submitAnswer(0.5));
+      document.getElementById('btn-probablynot').addEventListener('click', () => submitAnswer(0.25));
+      document.getElementById('btn-no').addEventListener('click', () => submitAnswer(0.0));
+    });
+  </script>
+</body>
+</html>
