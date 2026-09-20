@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guess the Person</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #10b981;
+      --border: #334155;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 2.25rem;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 1rem;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-radius: 0.375rem;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background-color: var(--primary);
+      color: #fff;
+    }
+
+    .view-panel {
+      display: none;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Game Card Styling */
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+
+    .badge-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .badge {
+      background-color: #334155;
+      color: #38bdf8;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge.country {
+      background-color: #334155;
+      color: #f43f5e;
+    }
+
+    .clue-box {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+      background: #0f172a;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      border-left: 4px solid var(--primary);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .guess-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .guess-box input {
+      flex: 1;
+      background-color: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.625rem;
+      border-radius: 0.375rem;
+      font-size: 1rem;
+    }
+
+    .guess-feedback {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      min-height: 1.25rem;
+    }
+
+    .guess-feedback.correct {
+      color: var(--accent);
+    }
+
+    .guess-feedback.incorrect {
+      color: var(--danger);
+    }
+
+    .answer-section {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .answer-text {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: none;
+      margin-top: 0.5rem;
+    }
+
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-full {
+      width: 100%;
+    }
+
+    .btn-secondary {
+      background-color: #475569;
+      margin-top: 0.5rem;
+    }
+
+    .btn-secondary:hover {
+      background-color: #334155;
+    }
+
+    /* Form Styling */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background-color: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.625rem;
+      border-radius: 0.375rem;
+      font-size: 1rem;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.875rem;
+      display: none;
+      margin-bottom: 1rem;
+    }
+
+    .submitter-tag {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 1rem;
+      font-style: italic;
+    }
+
+    .controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .controls-bar select,
+    .controls-bar input {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Guess the Person</h1>
+    <p>Test your knowledge with famous clue trivia</p>
+  </header>
+
+  <div class="container">
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('play')">Play Game</button>
+      <button class="tab-btn" onclick="switchTab('add')">Add Trivia</button>
+    </div>
+
+    <!-- LOOKING VIEW (PLAY) -->
+    <div id="playView" class="view-panel active">
+      <div class="controls-bar">
+        <div class="controls-row">
+          <input type="text" id="searchInput" placeholder="Search by name or clue..." oninput="filterAndPickRandom()">
+          <select id="filterCategory" onchange="filterAndPickRandom()">
+            <option value="All">All Categories</option>
+            <option value="Sports">Sports</option>
+            <option value="YouTubers">YouTubers</option>
+            <option value="Footballers">Footballers</option>
+            <option value="Actors">Actors</option>
+            <option value="Singers">Singers</option>
+            <option value="Country Leaders">Country Leaders</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card" id="gameCard">
+        <div class="badge-group">
+          <span class="badge" id="cardCategory">Category</span>
+          <span class="badge country" id="cardCountry">Country</span>
+        </div>
+        
+        <div class="clue-box" id="cardClue">
+          Achievement clue will appear here...
+        </div>
+
+        <form class="guess-box" onsubmit="handleGuessSubmit(event)">
+          <input type="text" id="userGuess" placeholder="Type your guess..." autocomplete="off">
+          <button type="submit" class="btn">Guess</button>
+        </form>
+
+        <div class="guess-feedback" id="guessFeedback"></div>
+
+        <button class="btn btn-full" id="revealBtn" onclick="revealAnswer()">Reveal Person</button>
+        
+        <div class="answer-section">
+          <div class="answer-text" id="cardAnswer"></div>
+        </div>
+
+        <div class="submitter-tag" id="cardSubmitter"></div>
+
+        <button class="btn btn-secondary btn-full" style="margin-top: 1rem;" onclick="loadRandomCard()">Next Random Person</button>
+      </div>
+
+      <div id="emptyMessage" class="card" style="display: none; text-align: center; color: var(--text-muted);">
+        No trivia questions match your filter or search. Try adjusting them or add a new clue!
+      </div>
+    </div>
+
+    <!-- ADDING VIEW (FORM) -->
+    <div id="addView" class="view-panel">
+      <form class="card" id="triviaForm" onsubmit="handleFormSubmit(event)">
+        <div id="formError" class="error-msg">Please fill out all fields before submitting.</div>
+
+        <div class="form-group">
+          <label for="submitterName">Your Name</label>
+          <input type="text" id="submitterName" placeholder="e.g. Alex">
+        </div>
+
+        <div class="form-group">
+          <label for="personName">Person Name (The Answer)</label>
+          <input type="text" id="personName" placeholder="e.g. Lionel Messi">
+        </div>
+
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category">
+            <option value="">Select a category</option>
+            <option value="Sports">Sports</option>
+            <option value="YouTubers">YouTubers</option>
+            <option value="Footballers">Footballers</option>
+            <option value="Actors">Actors</option>
+            <option value="Singers">Singers</option>
+            <option value="Country Leaders">Country Leaders</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="country">Country</label>
+          <input type="text" id="country" placeholder="e.g. Argentina">
+        </div>
+
+        <div class="form-group">
+          <label for="achievementClue">Achievement Clue (max 500 chars)</label>
+          <textarea id="achievementClue" maxlength="500" placeholder="Describe their famous accomplishment without naming them..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-full">Submit Trivia Clue</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // FAKE DATA ARRAY (20 INITIAL ENTRIES)
+    // ==========================================
+    const defaultData = [
+      { submittedBy: "Admin", personName: "Lionel Messi", category: "Footballers", country: "Argentina", achievementClue: "Won the 2022 FIFA World Cup and has claimed 8 Ballon d'Or awards during his career." },
+      { submittedBy: "Admin", personName: "MrBeast", category: "YouTubers", country: "USA", achievementClue: "Became the individual creator with the highest number of subscribers on YouTube, known for expensive stunt videos." },
+      { submittedBy: "Admin", personName: "Taylor Swift", category: "Singers", country: "USA", achievementClue: "First artist to win Album of the Year four times at the Grammy Awards and launched the historic Eras Tour." },
+      { submittedBy: "Admin", personName: "Usain Bolt", category: "Sports", country: "Jamaica", achievementClue: "Holds world records in the 100m and 200m sprints, widely considered the fastest human in history." },
+      { submittedBy: "Admin", personName: "Leonardo DiCaprio", category: "Actors", country: "USA", achievementClue: "Starred in Titanic and won his first Best Actor Oscar for his role in The Revenant." },
+      { submittedBy: "Admin", personName: "Winston Churchill", category: "Country Leaders", country: "UK", achievementClue: "Prime Minister who led the United Kingdom to victory during the Second World War." },
+      { submittedBy: "Admin", personName: "Cristiano Ronaldo", category: "Footballers", country: "Portugal", achievementClue: "All-time top goalscorer in professional football history and 5-time Champions League winner." },
+      { submittedBy: "Admin", personName: "PewDiePie", category: "YouTubers", country: "Sweden", achievementClue: "Pioneered YouTube gaming commentary culture and held the top spot on YouTube for several years." },
+      { submittedBy: "Admin", personName: "Adele", category: "Singers", country: "UK", achievementClue: "Known for powerful ballads like 'Hello' and 'Rolling in the Deep', earning multiple Grammys and an Oscar." },
+      { submittedBy: "Admin", personName: "Michael Phelps", category: "Sports", country: "USA", achievementClue: "The most decorated Olympian of all time with a total of 28 Olympic medals (23 gold)." },
+      { submittedBy: "Admin", personName: "Zendaya", category: "Actors", country: "USA", achievementClue: "Became the youngest two-time Lead Actress Drama Emmy winner for her role in Euphoria." },
+      { submittedBy: "Admin", personName: "Nelson Mandela", category: "Country Leaders", country: "South Africa", achievementClue: "Nobel Peace Prize winner who spent 27 years in prison before becoming South Africa's first Black president." },
+      { submittedBy: "Admin", personName: "Kylian Mbappé", category: "Footballers", country: "France", achievementClue: "Scored a hat-trick in a World Cup final at age 23 and won the 2018 World Cup as a teenager." },
+      { submittedBy: "Admin", personName: "Mark Rober", category: "YouTubers", country: "USA", achievementClue: "Former NASA engineer famous for creating glitterbomb packages to prank porch pirates on YouTube." },
+      { submittedBy: "Admin", personName: "Beyoncé", category: "Singers", country: "USA", achievementClue: "Holds the record for the most Grammy Award wins by any individual in history." },
+      { submittedBy: "Admin", personName: "Serena Williams", category: "Sports", country: "USA", achievementClue: "Won 23 Grand Slam singles titles during the Open Era, dominating women's tennis for decades." },
+      { submittedBy: "Admin", personName: "Tom Hanks", category: "Actors", country: "USA", achievementClue: "Beloved actor who won back-to-back Oscars for Philadelphia and Forrest Gump." },
+      { submittedBy: "Admin", personName: "Barack Obama", category: "Country Leaders", country: "USA", achievementClue: "Served as the 44th President of the United States and was awarded the Nobel Peace Prize in 2009." },
+      { submittedBy: "Admin", personName: "Shakira", category: "Singers", country: "Colombia", achievementClue: "Known as the Queen of Latin Music, performed at the 2010 World Cup with the hit 'Waka Waka'." },
+      { submittedBy: "Admin", personName: "Jackie Chan", category: "Actors", country: "Hong Kong", achievementClue: "Famous worldwide for performing his own high-risk acrobatic stunts and slapstick martial arts choreography." }
+    ];
+    // ==========================================
+
+    // Initialize data from LocalStorage or fall back to default fake data
+    let triviaData = JSON.parse(localStorage.getItem('guessThePersonData')) || defaultData;
+    let currentCard = null;
+
+    function saveToLocalStorage() {
+      localStorage.setItem('guessThePersonData', JSON.stringify(triviaData));
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+
+      if (tab === 'play') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('playView').classList.add('active');
+        filterAndPickRandom();
+      } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('addView').classList.add('active');
+      }
+    }
+
+    function getFilteredData() {
+      const selectedCat = document.getElementById('filterCategory').value;
+      const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+
+      return triviaData.filter(item => {
+        const matchesCategory = selectedCat === 'All' || item.category === selectedCat;
+        const matchesSearch = !searchQuery || 
+          item.personName.toLowerCase().includes(searchQuery) || 
+          item.achievementClue.toLowerCase().includes(searchQuery);
+        return matchesCategory && matchesSearch;
+      });
+    }
+
+    function filterAndPickRandom() {
+      loadRandomCard();
+    }
+
+    function loadRandomCard() {
+      const filteredList = getFilteredData();
+      const cardEl = document.getElementById('gameCard');
+      const emptyEl = document.getElementById('emptyMessage');
+
+      if (filteredList.length === 0) {
+        cardEl.style.display = 'none';
+        emptyEl.style.display = 'block';
+        currentCard = null;
+        return;
+      }
+
+      cardEl.style.display = 'block';
+      emptyEl.style.display = 'none';
+
+      // Pick random item
+      const randomIndex = Math.floor(Math.random() * filteredList.length);
+      currentCard = filteredList[randomIndex];
+
+      document.getElementById('cardCategory').innerText = currentCard.category;
+      document.getElementById('cardCountry').innerText = currentCard.country;
+      
+      let clueText = currentCard.achievementClue;
+      if (clueText.length > 500) {
+        clueText = clueText.substring(0, 497) + '...';
+      }
+      document.getElementById('cardClue').innerText = clueText;
+
+      // Reset guess state
+      document.getElementById('userGuess').value = '';
+      const feedbackEl = document.getElementById('guessFeedback');
+      feedbackEl.innerText = '';
+      feedbackEl.className = 'guess-feedback';
+
+      document.getElementById('cardAnswer').innerText = currentCard.personName;
+      document.getElementById('cardAnswer').style.display = 'none';
+      document.getElementById('revealBtn').style.display = 'block';
+      
+      document.getElementById('cardSubmitter').innerText = `Submitted by: ${currentCard.submittedBy || 'Anonymous'}`;
+    }
+
+    function handleGuessSubmit(e) {
+      e.preventDefault();
+      if (!currentCard) return;
+
+      const userGuess = document.getElementById('userGuess').value.trim().toLowerCase();
+      const correctAnswer = currentCard.personName.toLowerCase();
+      const feedbackEl = document.getElementById('guessFeedback');
+
+      if (!userGuess) return;
+
+      if (userGuess === correctAnswer || correctAnswer.includes(userGuess) && userGuess.length > 3) {
+        feedbackEl.innerText = `Correct! It's ${currentCard.personName}!`;
+        feedbackEl.className = 'guess-feedback correct';
+        revealAnswer();
+      } else {
+        feedbackEl.innerText = 'Incorrect! Try again or reveal the answer.';
+        feedbackEl.className = 'guess-feedback incorrect';
+      }
+    }
+
+    function revealAnswer() {
+      document.getElementById('cardAnswer').style.display = 'block';
+      document.getElementById('revealBtn').style.display = 'none';
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      
+      const submitterName = document.getElementById('submitterName').value.trim();
+      const personName = document.getElementById('personName').value.trim();
+      const category = document.getElementById('category').value;
+      const country = document.getElementById('country').value.trim();
+      const achievementClue = document.getElementById('achievementClue').value.trim();
+      const errorEl = document.getElementById('formError');
+
+      if (!submitterName || !personName || !category || !country || !achievementClue) {
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      errorEl.style.display = 'none';
+
+      // Save row to array & local storage
+      triviaData.push({
+        submittedBy: submitterName,
+        personName: personName,
+        category: category,
+        country: country,
+        achievementClue: achievementClue
+      });
+      saveToLocalStorage();
+
+      // Clear form
+      document.getElementById('triviaForm').reset();
+
+      // Alert & switch view back to game
+      alert('Trivia clue added successfully!');
+      switchTab('play');
+    }
+
+    // Initialize initial game view
+    filterAndPickRandom();
+  </script>
+</body>
+</html>
