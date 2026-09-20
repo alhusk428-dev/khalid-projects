@@ -3,52 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projects Dashboard</title>
+<title>Mythic Projects Realm</title>
 <style>
   :root {
-    --bg-main: #f5f3ef;
-    --panel-bg: #ffffff;
-    --border-color: #e2ded7;
-    --text-primary: #1c1a17;
-    --text-muted: #78736a;
-    --accent: #2b2823;
-    --badge-bg: #ede9e1;
+    --bg-main: #0c0d12;
+    --panel-bg: #14161f;
+    --border-color: #2a2d3d;
+    --border-glow: #d4af37;
+    --text-primary: #e6e8f0;
+    --text-muted: #8b92b0;
+    --accent: #d4af37;
+    --accent-hover: #f3ca40;
+    --badge-bg: #252119;
+    --badge-gold: #ffd700;
   }
 
   body.theme-dark {
-    --bg-main: #121318;
-    --panel-bg: #1c1d24;
-    --border-color: #2e303d;
-    --text-primary: #f0f0f5;
-    --text-muted: #8e90a0;
-    --accent: #6366f1;
-    --badge-bg: #2a2b36;
+    --bg-main: #0c0d12;
+    --panel-bg: #14161f;
+    --border-color: #2a2d3d;
+    --text-primary: #e6e8f0;
+    --text-muted: #8b92b0;
+    --accent: #d4af37;
+    --badge-bg: #252119;
   }
 
   body.theme-blue {
-    --bg-main: #edf2f7;
-    --panel-bg: #ffffff;
-    --border-color: #cbd5e1;
-    --text-primary: #0f172a;
+    --bg-main: #09131d;
+    --panel-bg: #0f1d2e;
+    --border-color: #1e3a5f;
+    --text-primary: #e0f2fe;
     --text-muted: #64748b;
-    --accent: #2563eb;
-    --badge-bg: #e0e7ff;
+    --accent: #38bdf8;
+    --badge-bg: #0c2a4a;
   }
 
   body.theme-sage {
-    --bg-main: #f0f4f1;
-    --panel-bg: #ffffff;
-    --border-color: #d3ded6;
-    --text-primary: #19241b;
+    --bg-main: #0c140e;
+    --panel-bg: #142118;
+    --border-color: #233829;
+    --text-primary: #e2f1e5;
     --text-muted: #627566;
-    --accent: #2e5a36;
-    --badge-bg: #e1ebe3;
+    --accent: #4ade80;
+    --badge-bg: #15331e;
   }
 
   * { box-sizing: border-box; }
 
   body {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Cinzel', system-ui, -apple-system, sans-serif;
     margin: 0;
     padding: 0;
     background: var(--bg-main);
@@ -59,133 +62,180 @@
 
   /* Sidebar Navigation */
   aside {
-    width: 240px;
+    width: 250px;
     background: var(--panel-bg);
     border-right: 1px solid var(--border-color);
-    padding: 2rem 1.25rem;
+    padding: 2.5rem 1.25rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
     flex-shrink: 0;
+    box-shadow: 4px 0 25px rgba(0,0,0,0.5);
   }
 
   .brand {
-    font-weight: 800;
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
+    font-weight: 900;
+    font-size: 1.15rem;
+    margin-bottom: 2rem;
     padding-left: 0.5rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
   }
 
   .nav-btn {
     display: block;
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: 0.85rem 1.1rem;
     text-align: left;
     background: transparent;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.95rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 0.9rem;
     font-weight: 600;
+    letter-spacing: 1px;
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
   }
 
-  .nav-btn:hover { background: var(--bg-main); color: var(--text-primary); }
-  .nav-btn.active { background: var(--accent); color: #ffffff; }
+  .nav-btn:hover { 
+    background: rgba(212, 175, 55, 0.05); 
+    color: var(--text-primary);
+    border-color: rgba(212, 175, 55, 0.2);
+  }
+  
+  .nav-btn.active { 
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.05)); 
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.15);
+  }
 
   /* Main Content Area */
   main {
     flex-grow: 1;
-    padding: 2.5rem 2rem;
+    padding: 3rem 2.5rem;
     display: flex;
     justify-content: center;
     align-items: flex-start;
   }
 
-  .tab-content { display: none; width: 100%; max-width: 850px; }
+  .tab-content { display: none; width: 100%; max-width: 900px; }
   .tab-content.active { display: block; }
 
   /* Dashboard Stats Bar */
   .stats-bar {
     display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    gap: 1.25rem;
+    margin-bottom: 2rem;
   }
 
   .stat-card {
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 0.75rem 1.25rem;
+    padding: 1rem 1.5rem;
     font-size: 0.85rem;
+    letter-spacing: 1px;
     color: var(--text-muted);
+    flex: 1;
   }
 
   .stat-card strong {
     display: block;
-    font-size: 1.2rem;
-    color: var(--text-primary);
+    font-size: 1.5rem;
+    color: var(--accent);
+    margin-top: 0.25rem;
   }
 
   .search-input {
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: 0.9rem 1.2rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--panel-bg);
     color: var(--text-primary);
     font-size: 0.95rem;
     outline: none;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
+    transition: border-color 0.2s ease;
+  }
+
+  .search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
   }
 
   /* Grid & Cards */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem;
   }
 
   .card {
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1.25rem;
+    border-radius: 12px;
+    padding: 1.5rem;
     cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 110px;
+    min-height: 130px;
+    position: relative;
+    overflow: hidden;
   }
 
-  .card:hover { transform: translateY(-2px); border-color: var(--accent); }
-  .card h2 { margin: 0; font-size: 1.05rem; }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .card:hover { 
+    transform: translateY(-4px); 
+    border-color: var(--accent); 
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(212, 175, 55, 0.15);
+  }
+
+  .card:hover::before { opacity: 1; }
+
+  .card h2 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.5px; }
 
   .badge {
     align-self: flex-start;
     font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.25rem 0.5rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    padding: 0.35rem 0.65rem;
     border-radius: 4px;
     background: var(--badge-bg);
-    color: var(--text-primary);
+    color: var(--accent);
+    border: 1px solid rgba(212, 175, 55, 0.3);
   }
 
   .card.empty {
     border: 2px dashed var(--border-color);
     background: transparent;
     cursor: default;
+    opacity: 0.5;
   }
-  .card.empty:hover { transform: none; border-color: var(--border-color); }
+  .card.empty:hover { transform: none; border-color: var(--border-color); box-shadow: none; }
+  .card.empty:hover::before { opacity: 0; }
   .card.empty h2 { color: var(--text-muted); }
 
   /* Fullscreen Modal & Game View */
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
     display: none;
     justify-content: center;
     align-items: center;
@@ -194,37 +244,41 @@
 
   .modal-card {
     background: var(--panel-bg);
+    border: 1px solid var(--accent);
     border-radius: 12px;
-    padding: 1.75rem;
-    width: 320px;
+    padding: 2rem;
+    width: 340px;
     text-align: center;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6), 0 0 20px rgba(212, 175, 55, 0.2);
   }
 
-  .modal-btns { display: flex; gap: 0.75rem; margin-top: 1.25rem; }
+  .modal-btns { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
 
   .btn {
     flex: 1;
-    padding: 0.65rem;
+    padding: 0.75rem;
     border-radius: 6px;
     border: none;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 1px;
     cursor: pointer;
     text-decoration: none;
   }
 
-  .btn-confirm { background: var(--accent); color: #ffffff; }
-  .btn-cancel { background: var(--bg-main); color: var(--text-primary); }
+  .btn-confirm { background: var(--accent); color: #0c0d12; }
+  .btn-confirm:hover { background: var(--accent-hover); }
+  .btn-cancel { background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); }
 
   /* Embedded Player Frame */
   .game-frame-container {
     display: none;
     width: 100%;
-    height: 75vh;
-    border: 1px solid var(--border-color);
+    height: 78vh;
+    border: 1px solid var(--accent);
     border-radius: 12px;
     overflow: hidden;
-    background: #fff;
+    background: #000;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
   }
 
   iframe { width: 100%; height: 100%; border: none; }
@@ -233,19 +287,23 @@
     display: inline-block;
     margin-bottom: 1rem;
     cursor: pointer;
-    font-weight: 600;
-    color: var(--text-muted);
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    transition: transform 0.2s ease;
   }
+
+  .back-nav:hover { transform: translateX(-4px); }
 </style>
 </head>
 <body>
 
   <aside>
-    <div class="brand">PROJECTS HUB</div>
-    <button class="nav-btn active" onclick="switchTab('games', this)">Games</button>
-    <button class="nav-btn" onclick="switchTab('about', this)">About Me</button>
-    <button class="nav-btn" onclick="switchTab('info', this)">Information</button>
-    <button class="nav-btn" onclick="switchTab('settings', this)">Settings</button>
+    <div class="brand">⚔️ REALM HUB</div>
+    <button class="nav-btn active" onclick="switchTab('games', this)">GAMES</button>
+    <button class="nav-btn" onclick="switchTab('about', this)">ABOUT</button>
+    <button class="nav-btn" onclick="switchTab('info', this)">INFO</button>
+    <button class="nav-btn" onclick="switchTab('settings', this)">SETTINGS</button>
   </aside>
 
   <main>
@@ -255,7 +313,7 @@
       
       <!-- Player View (Hidden by default) -->
       <div id="playerContainer" style="display:none;">
-        <span class="back-nav" onclick="closeGameView()">&larr; Back to Directory</span>
+        <span class="back-nav" onclick="closeGameView()">&larr; RETURN TO SANCTUARY</span>
         <div class="game-frame-container" id="frameBox">
           <iframe id="gameIframe" src=""></iframe>
         </div>
@@ -264,31 +322,31 @@
       <!-- Directory View -->
       <div id="directoryView">
         <div class="stats-bar">
-          <div class="stat-card">Active Projects<strong>1</strong></div>
-          <div class="stat-card">Available Slots<strong>3</strong></div>
+          <div class="stat-card">ACTIVE QUESTS<strong>2</strong></div>
+          <div class="stat-card">LOCKED SLOTS<strong>2</strong></div>
         </div>
 
-        <input type="text" id="search" class="search-input" placeholder="Search projects..." onkeyup="filterGames()">
+        <input type="text" id="search" class="search-input" placeholder="Search realms and games..." onkeyup="filterGames()">
 
         <div class="grid" id="gameGrid">
-          <div class="card" data-title="guess person" onclick="openModal('Guess the Person', './guess-the-person/guess.html')">
-            <h2>Guess the Person</h2>
+          <div class="card" data-title="guess person v1" onclick="openModal('Guess the Person v1', './guess-the-person/guess.html')">
+            <h2>Guess the Person v1</h2>
             <span class="badge">PLAY</span>
           </div>
 
-          <div class="card empty" data-title="slot 2">
-            <h2>Slot #2</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
+          <div class="card" data-title="guess person v2" onclick="openModal('Guess the Person v2', './guessthepersonv2/index.html')">
+            <h2>Guess the Person v2</h2>
+            <span class="badge">PLAY</span>
           </div>
 
           <div class="card empty" data-title="slot 3">
             <h2>Slot #3</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
+            <span class="badge" style="color:var(--text-muted); border-color:transparent;">LOCKED</span>
           </div>
 
           <div class="card empty" data-title="slot 4">
             <h2>Slot #4</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
+            <span class="badge" style="color:var(--text-muted); border-color:transparent;">LOCKED</span>
           </div>
         </div>
       </div>
@@ -297,25 +355,24 @@
 
     <!-- About Me Tab -->
     <section id="about" class="tab-content">
-      <h1 style="margin-top:0;">About Me</h1>
+      <h1 style="margin-top:0; color:var(--accent);">About the Creator</h1>
       <p style="color:var(--text-muted);">Web development portfolio hosted on GitHub Pages.</p>
     </section>
 
     <!-- Information Tab -->
     <section id="info" class="tab-content">
-      <h1 style="margin-top:0;">Information</h1>
+      <h1 style="margin-top:0; color:var(--accent);">Realm Information</h1>
       <p style="color:var(--text-muted);">Built with custom CSS layout and plain JS.</p>
     </section>
 
     <!-- Settings Tab -->
     <section id="settings" class="tab-content">
-      <h1 style="margin-top:0;">Settings</h1>
-      <p style="color:var(--text-muted);">Choose Palette Theme:</p>
+      <h1 style="margin-top:0; color:var(--accent);">Settings</h1>
+      <p style="color:var(--text-muted);">Choose Realm Palette:</p>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('light')">Beige Light</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('dark')">Dark</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('blue')">Ocean</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('sage')">Sage</button>
+        <button class="nav-btn" style="width:auto;" onclick="setTheme('dark')">Mythic Obsidian</button>
+        <button class="nav-btn" style="width:auto;" onclick="setTheme('blue')">Ocean Abyss</button>
+        <button class="nav-btn" style="width:auto;" onclick="setTheme('sage')">Forest Realm</button>
       </div>
     </section>
 
@@ -324,11 +381,11 @@
   <!-- Confirmation Modal -->
   <div id="modalOverlay" class="modal-overlay">
     <div class="modal-card">
-      <h3 id="modalTitle" style="margin:0 0 0.5rem 0;">Launch Project</h3>
-      <p style="margin:0; color:var(--text-muted); font-size:0.85rem;">Open interactive game view?</p>
+      <h3 id="modalTitle" style="margin:0 0 0.5rem 0; color:var(--accent);">Enter Realm</h3>
+      <p style="margin:0; color:var(--text-muted); font-size:0.85rem;">Begin interactive journey?</p>
       <div class="modal-btns">
-        <button class="btn btn-cancel" onclick="closeModal()">Back</button>
-        <button class="btn btn-confirm" onclick="launchGame()">Launch</button>
+        <button class="btn btn-cancel" onclick="closeModal()">CANCEL</button>
+        <button class="btn btn-confirm" onclick="launchGame()">ENTER</button>
       </div>
     </div>
   </div>
@@ -370,7 +427,7 @@
 
   function setTheme(themeName) {
     document.body.className = '';
-    if (themeName !== 'light') {
+    if (themeName !== 'dark') {
       document.body.classList.add('theme-' + themeName);
     }
     localStorage.setItem('portfolioTheme', themeName);
