@@ -1,394 +1,303 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projects Dashboard</title>
-<style>
-  :root {
-    --bg-main: #f5f3ef;
-    --panel-bg: #ffffff;
-    --border-color: #e2ded7;
-    --text-primary: #1c1a17;
-    --text-muted: #78736a;
-    --accent: #2b2823;
-    --badge-bg: #ede9e1;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Khalid's Archives | Mythic Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090a10;
+      --card-bg: rgba(18, 22, 38, 0.75);
+      --border-glow: rgba(157, 78, 221, 0.4);
+      --accent: #9d4edd;
+      --accent-glow: #c77dff;
+      --gold: #ffb703;
+      --gold-glow: rgba(255, 183, 3, 0.3);
+      --text-main: #f8f9fa;
+      --text-muted: #a0aab8;
+    }
 
-  body.theme-dark {
-    --bg-main: #121318;
-    --panel-bg: #1c1d24;
-    --border-color: #2e303d;
-    --text-primary: #f0f0f5;
-    --text-muted: #8e90a0;
-    --accent: #6366f1;
-    --badge-bg: #2a2b36;
-  }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-  body.theme-blue {
-    --bg-main: #edf2f7;
-    --panel-bg: #ffffff;
-    --border-color: #cbd5e1;
-    --text-primary: #0f172a;
-    --text-muted: #64748b;
-    --accent: #2563eb;
-    --badge-bg: #e0e7ff;
-  }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem;
+      position: relative;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% -10%, rgba(157, 78, 221, 0.25), transparent 60%),
+        radial-gradient(circle at 80% 90%, rgba(255, 183, 3, 0.1), transparent 50%);
+    }
 
-  body.theme-sage {
-    --bg-main: #f0f4f1;
-    --panel-bg: #ffffff;
-    --border-color: #d3ded6;
-    --text-primary: #19241b;
-    --text-muted: #627566;
-    --accent: #2e5a36;
-    --badge-bg: #e1ebe3;
-  }
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: -1;
+      pointer-events: none;
+    }
 
-  * { box-sizing: border-box; }
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      max-width: 800px;
+    }
 
-  body {
-    font-family: system-ui, -apple-system, sans-serif;
-    margin: 0;
-    padding: 0;
-    background: var(--bg-main);
-    color: var(--text-primary);
-    display: flex;
-    min-height: 100vh;
-  }
+    .realm-badge {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border-radius: 50px;
+      background: rgba(255, 183, 3, 0.1);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 0.8rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 15px var(--gold-glow);
+    }
 
-  /* Sidebar Navigation */
-  aside {
-    width: 240px;
-    background: var(--panel-bg);
-    border-right: 1px solid var(--border-color);
-    padding: 2rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 3.2rem;
+      font-weight: 800;
+      color: var(--text-main);
+      text-shadow: 0 0 25px rgba(199, 125, 255, 0.5), 0 0 50px rgba(157, 78, 221, 0.3);
+      letter-spacing: 3px;
+      margin-bottom: 0.8rem;
+    }
 
-  .brand {
-    font-weight: 800;
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
-    padding-left: 0.5rem;
-  }
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
 
-  .nav-btn {
-    display: block;
-    width: 100%;
-    padding: 0.75rem 1rem;
-    text-align: left;
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
+    .stats-container {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 2.5rem;
+      background: rgba(15, 18, 30, 0.6);
+      padding: 0.8rem 2rem;
+      border-radius: 50px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+    }
 
-  .nav-btn:hover { background: var(--bg-main); color: var(--text-primary); }
-  .nav-btn.active { background: var(--accent); color: #ffffff; }
+    .stat-item {
+      text-align: center;
+    }
 
-  /* Main Content Area */
-  main {
-    flex-grow: 1;
-    padding: 2.5rem 2rem;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-  }
+    .stat-value {
+      font-family: 'Cinzel', serif;
+      font-size: 1.2rem;
+      color: var(--gold);
+      font-weight: 700;
+    }
 
-  .tab-content { display: none; width: 100%; max-width: 850px; }
-  .tab-content.active { display: block; }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
 
-  /* Dashboard Stats Bar */
-  .stats-bar {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
+    .filter-box {
+      margin-bottom: 3rem;
+      width: 100%;
+      max-width: 450px;
+    }
 
-  .stat-card {
-    background: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.75rem 1.25rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
+    .filter-box input {
+      width: 100%;
+      padding: 0.85rem 1.5rem;
+      background: rgba(18, 22, 38, 0.8);
+      border: 1px solid var(--border-glow);
+      border-radius: 30px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
 
-  .stat-card strong {
-    display: block;
-    font-size: 1.2rem;
-    color: var(--text-primary);
-  }
+    .filter-box input:focus {
+      border-color: var(--accent-glow);
+      box-shadow: 0 0 20px rgba(199, 125, 255, 0.4);
+    }
 
-  .search-input {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background: var(--panel-bg);
-    color: var(--text-primary);
-    font-size: 0.95rem;
-    outline: none;
-    margin-bottom: 1.5rem;
-  }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 2.5rem;
+      width: 100%;
+      max-width: 950px;
+    }
 
-  /* Grid & Cards */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
-  }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-glow);
+      border-radius: 16px;
+      padding: 2rem;
+      backdrop-filter: blur(12px);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
 
-  .card {
-    background: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1.25rem;
-    cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-height: 110px;
-  }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+      opacity: 0.5;
+      transition: opacity 0.3s ease;
+    }
 
-  .card:hover { transform: translateY(-2px); border-color: var(--accent); }
-  .card h2 { margin: 0; font-size: 1.05rem; }
+    .card:hover {
+      transform: translateY(-8px);
+      border-color: var(--accent-glow);
+      box-shadow: 0 15px 35px rgba(157, 78, 221, 0.25);
+    }
 
-  .badge {
-    align-self: flex-start;
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    background: var(--badge-bg);
-    color: var(--text-primary);
-  }
+    .card:hover::before {
+      opacity: 1;
+    }
 
-  .card.empty {
-    border: 2px dashed var(--border-color);
-    background: transparent;
-    cursor: default;
-  }
-  .card.empty:hover { transform: none; border-color: var(--border-color); }
-  .card.empty h2 { color: var(--text-muted); }
+    .card-tag {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--gold);
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+    }
 
-  /* Fullscreen Modal & Game View */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-  }
+    .card h2 {
+      font-family: 'Cinzel', serif;
+      color: var(--text-main);
+      font-size: 1.6rem;
+      margin-bottom: 0.8rem;
+    }
 
-  .modal-card {
-    background: var(--panel-bg);
-    border-radius: 12px;
-    padding: 1.75rem;
-    width: 320px;
-    text-align: center;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  }
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
 
-  .modal-btns { display: flex; gap: 0.75rem; margin-top: 1.25rem; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.5rem;
+      background: linear-gradient(135deg, #7b2cbf, #9d4edd);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(157, 78, 221, 0.4);
+    }
 
-  .btn {
-    flex: 1;
-    padding: 0.65rem;
-    border-radius: 6px;
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-  }
+    .btn:hover {
+      background: linear-gradient(135deg, #9d4edd, #c77dff);
+      box-shadow: 0 0 25px rgba(199, 125, 255, 0.6);
+      transform: scale(1.02);
+    }
 
-  .btn-confirm { background: var(--accent); color: #ffffff; }
-  .btn-cancel { background: var(--bg-main); color: var(--text-primary); }
-
-  /* Embedded Player Frame */
-  .game-frame-container {
-    display: none;
-    width: 100%;
-    height: 75vh;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    overflow: hidden;
-    background: #fff;
-  }
-
-  iframe { width: 100%; height: 100%; border: none; }
-  
-  .back-nav {
-    display: inline-block;
-    margin-bottom: 1rem;
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-</style>
+    footer {
+      margin-top: 4rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
 
-  <aside>
-    <div class="brand">PROJECTS HUB</div>
-    <button class="nav-btn active" onclick="switchTab('games', this)">Games</button>
-    <button class="nav-btn" onclick="switchTab('about', this)">About Me</button>
-    <button class="nav-btn" onclick="switchTab('info', this)">Information</button>
-    <button class="nav-btn" onclick="switchTab('settings', this)">Settings</button>
-  </aside>
+  <header>
+    <div class="realm-badge">Khalid's Dev Realm</div>
+    <h1>Khalid's Archives</h1>
+    <p class="subtitle">An interactive showcase of web builds, games, and digital experiments.</p>
+  </header>
 
-  <main>
-
-    <!-- Games Tab -->
-    <section id="games" class="tab-content active">
-      
-      <!-- Player View (Hidden by default) -->
-      <div id="playerContainer" style="display:none;">
-        <span class="back-nav" onclick="closeGameView()">&larr; Back to Directory</span>
-        <div class="game-frame-container" id="frameBox">
-          <iframe id="gameIframe" src=""></iframe>
-        </div>
-      </div>
-
-      <!-- Directory View -->
-      <div id="directoryView">
-        <div class="stats-bar">
-          <div class="stat-card">Active Projects<strong>1</strong></div>
-          <div class="stat-card">Available Slots<strong>3</strong></div>
-        </div>
-
-        <input type="text" id="search" class="search-input" placeholder="Search projects..." onkeyup="filterGames()">
-
-        <div class="grid" id="gameGrid">
-          <div class="card" data-title="guess person" onclick="openModal('Guess the Person', './guess-the-person/guess.html')">
-            <h2>Guess the Person</h2>
-            <span class="badge">PLAY</span>
-          </div>
-
-          <div class="card empty" data-title="slot 2">
-            <h2>Slot #2</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
-          </div>
-
-          <div class="card empty" data-title="slot 3">
-            <h2>Slot #3</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
-          </div>
-
-          <div class="card empty" data-title="slot 4">
-            <h2>Slot #4</h2>
-            <span class="badge" style="color:var(--text-muted)">LOCKED</span>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- About Me Tab -->
-    <section id="about" class="tab-content">
-      <h1 style="margin-top:0;">About Me</h1>
-      <p style="color:var(--text-muted);">Web development portfolio hosted on GitHub Pages.</p>
-    </section>
-
-    <!-- Information Tab -->
-    <section id="info" class="tab-content">
-      <h1 style="margin-top:0;">Information</h1>
-      <p style="color:var(--text-muted);">Built with custom CSS layout and plain JS.</p>
-    </section>
-
-    <!-- Settings Tab -->
-    <section id="settings" class="tab-content">
-      <h1 style="margin-top:0;">Settings</h1>
-      <p style="color:var(--text-muted);">Choose Palette Theme:</p>
-      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('light')">Beige Light</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('dark')">Dark</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('blue')">Ocean</button>
-        <button class="nav-btn" style="width:auto;" onclick="setTheme('sage')">Sage</button>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Confirmation Modal -->
-  <div id="modalOverlay" class="modal-overlay">
-    <div class="modal-card">
-      <h3 id="modalTitle" style="margin:0 0 0.5rem 0;">Launch Project</h3>
-      <p style="margin:0; color:var(--text-muted); font-size:0.85rem;">Open interactive game view?</p>
-      <div class="modal-btns">
-        <button class="btn btn-cancel" onclick="closeModal()">Back</button>
-        <button class="btn btn-confirm" onclick="launchGame()">Launch</button>
-      </div>
+  <div class="stats-container">
+    <div class="stat-item">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Projects</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">Active</div>
+      <div class="stat-label">Status</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">v2.0</div>
+      <div class="stat-label">Edition</div>
     </div>
   </div>
 
-<script>
-  let activeGameUrl = '';
+  <div class="filter-box">
+    <input type="text" id="search" placeholder="Search archive projects..." onkeyup="filterGames()" />
+  </div>
 
-  function switchTab(tabId, element) {
-    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    
-    document.getElementById(tabId).classList.add('active');
-    element.classList.add('active');
-  }
+  <main class="grid" id="gameGrid">
+    <div class="card" data-title="guess the person v1">
+      <div>
+        <div class="card-tag">Interactive Game • Classic</div>
+        <h2>Guess the Person v1</h2>
+        <p>The original interactive deduction game. Analyze the clues step by step to reveal the mystery figure.</p>
+      </div>
+      <a href="./guess-the-person/guess.html" class="btn">Launch Game v1 &rarr;</a>
+    </div>
 
-  function openModal(title, url) {
-    activeGameUrl = url;
-    document.getElementById('modalTitle').innerText = title;
-    document.getElementById('modalOverlay').style.display = 'flex';
-  }
+    <div class="card" data-title="guess the person v2">
+      <div>
+        <div class="card-tag">Interactive Game • Enhanced</div>
+        <h2>Guess the Person v2</h2>
+        <p>The upgraded release featuring expanded rosters, polished animations, updated UI, and fine-tuned game logic.</p>
+      </div>
+      <a href="./guessthepersonv2/" class="btn">Launch Game v2 &rarr;</a>
+    </div>
+  </main>
 
-  function closeModal() {
-    document.getElementById('modalOverlay').style.display = 'none';
-  }
+  <footer>
+    &copy; Khalid's Archives — Hosted on GitHub Pages
+  </footer>
 
-  function launchGame() {
-    closeModal();
-    document.getElementById('directoryView').style.display = 'none';
-    document.getElementById('playerContainer').style.display = 'block';
-    document.getElementById('frameBox').style.display = 'block';
-    document.getElementById('gameIframe').src = activeGameUrl;
-  }
-
-  function closeGameView() {
-    document.getElementById('gameIframe').src = '';
-    document.getElementById('playerContainer').style.display = 'none';
-    document.getElementById('directoryView').style.display = 'block';
-  }
-
-  function setTheme(themeName) {
-    document.body.className = '';
-    if (themeName !== 'light') {
-      document.body.classList.add('theme-' + themeName);
+  <script>
+    function filterGames() {
+      const input = document.getElementById('search').value.toLowerCase();
+      const cards = document.querySelectorAll('#gameGrid .card');
+      cards.forEach(card => {
+        const title = card.getAttribute('data-title');
+        card.style.display = title.includes(input) ? "flex" : "none";
+      });
     }
-    localStorage.setItem('portfolioTheme', themeName);
-  }
-
-  // Load saved theme
-  const savedTheme = localStorage.getItem('portfolioTheme');
-  if (savedTheme) setTheme(savedTheme);
-
-  function filterGames() {
-    const input = document.getElementById('search').value.toLowerCase();
-    const cards = document.querySelectorAll('#gameGrid .card');
-    cards.forEach(card => {
-      const title = card.getAttribute('data-title');
-      card.style.display = title.includes(input) ? "flex" : "none";
-    });
-  }
-</script>
+  </script>
 
 </body>
 </html>
