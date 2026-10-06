@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Guess the Person</title>
+  <!-- Supabase JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -381,7 +383,14 @@
 
   <script>
     // ==========================================
-    // FAKE DATA ARRAY (20 INITIAL ENTRIES)
+    // SUPABASE CREDENTIALS
+    // ==========================================
+    const SUPABASE_URL = 'https://geftbgesogtrzwieyymd.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZnRiZ2Vzb2d0cnp3aWV5eW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0NDI4ODYsImV4cCI6MjEwNTAxODg4Nn0.vFigewI2f8YpETxOHwXrV4Xyl55Quk59JM4jYuE_rU0';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ==========================================
+    // DEFAULT DATA ARRAY (20 INITIAL ENTRIES)
     // ==========================================
     const defaultData = [
       { submittedBy: "Admin", personName: "Lionel Messi", category: "Footballers", country: "Argentina", achievementClue: "Won the 2022 FIFA World Cup and has claimed 8 Ballon d'Or awards during his career." },
@@ -405,11 +414,45 @@
       { submittedBy: "Admin", personName: "Shakira", category: "Singers", country: "Colombia", achievementClue: "Known as the Queen of Latin Music, performed at the 2010 World Cup with the hit 'Waka Waka'." },
       { submittedBy: "Admin", personName: "Jackie Chan", category: "Actors", country: "Hong Kong", achievementClue: "Famous worldwide for performing his own high-risk acrobatic stunts and slapstick martial arts choreography." }
     ];
-    // ==========================================
 
-    // Initialize data from LocalStorage or fall back to default fake data
     let triviaData = JSON.parse(localStorage.getItem('guessThePersonData')) || defaultData;
     let currentCard = null;
+
+    // Fetch data from Supabase on load and merge with local data
+    document.addEventListener('DOMContentLoaded', async () => {
+      await fetchSupabaseEntries();
+      filterAndPickRandom();
+    });
+
+    async function fetchSupabaseEntries() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('trivia_entries')
+          .select('*');
+
+        if (error) {
+          console.error('Supabase fetch error:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const mappedSupabaseData = data.map(item => ({
+            submittedBy: item.submitted_by,
+            personName: item.person_name,
+            category: item.category,
+            country: item.country,
+            achievementClue: item.achievement_clue
+          }));
+
+          // Merge default, local, and live Supabase items without duplicates
+          const combined = [...defaultData, ...mappedSupabaseData];
+          triviaData = Array.from(new Set(combined.map(a => JSON.stringify(a)))).map(a => JSON.parse(a));
+          saveToLocalStorage();
+        }
+      } catch (err) {
+        console.error('Failed to load from Supabase:', err);
+      }
+    }
 
     function saveToLocalStorage() {
       localStorage.setItem('guessThePersonData', JSON.stringify(triviaData));
@@ -497,7 +540,7 @@
 
       if (!userGuess) return;
 
-      if (userGuess === correctAnswer || correctAnswer.includes(userGuess) && userGuess.length > 3) {
+      if (userGuess === correctAnswer || (correctAnswer.includes(userGuess) && userGuess.length > 3)) {
         feedbackEl.innerText = `Correct! It's ${currentCard.personName}!`;
         feedbackEl.className = 'guess-feedback correct';
         revealAnswer();
@@ -512,7 +555,7 @@
       document.getElementById('revealBtn').style.display = 'none';
     }
 
-    function handleFormSubmit(e) {
+    async function handleFormSubmit(e) {
       e.preventDefault();
       
       const submitterName = document.getElementById('submitterName').value.trim();
@@ -529,7 +572,24 @@
 
       errorEl.style.display = 'none';
 
-      // Save row to array & local storage
+      const newEntry = {
+        submitted_by: submitterName,
+        person_name: personName,
+        category: category,
+        country: country,
+        achievement_clue: achievementClue
+      };
+
+      // 1. Save directly to Supabase
+      const { data, error } = await supabaseClient
+        .from('trivia_entries')
+        .insert([newEntry]);
+
+      if (error) {
+        console.error('Supabase save error:', error);
+      }
+
+      // 2. Local fallback update
       triviaData.push({
         submittedBy: submitterName,
         personName: personName,
@@ -542,13 +602,9 @@
       // Clear form
       document.getElementById('triviaForm').reset();
 
-      // Alert & switch view back to game
-      alert('Trivia clue added successfully!');
+      alert('Trivia clue added successfully and saved to Supabase!');
       switchTab('play');
     }
-
-    // Initialize initial game view
-    filterAndPickRandom();
   </script>
 </body>
 </html>
