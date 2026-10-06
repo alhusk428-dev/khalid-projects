@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Guess the Person</title>
+<<<<<<< HEAD
   <!-- Supabase JS Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+=======
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
   <style>
     :root {
       --bg: #0f172a;
@@ -383,6 +386,7 @@
 
   <script>
     // ==========================================
+<<<<<<< HEAD
     // SUPABASE CREDENTIALS
     // ==========================================
     const SUPABASE_URL = 'https://geftbgesogtrzwieyymd.supabase.co';
@@ -391,6 +395,9 @@
 
     // ==========================================
     // DEFAULT DATA ARRAY (20 INITIAL ENTRIES)
+=======
+    // FAKE DATA ARRAY (20 INITIAL ENTRIES)
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
     // ==========================================
     const defaultData = [
       { submittedBy: "Admin", personName: "Lionel Messi", category: "Footballers", country: "Argentina", achievementClue: "Won the 2022 FIFA World Cup and has claimed 8 Ballon d'Or awards during his career." },
@@ -414,6 +421,7 @@
       { submittedBy: "Admin", personName: "Shakira", category: "Singers", country: "Colombia", achievementClue: "Known as the Queen of Latin Music, performed at the 2010 World Cup with the hit 'Waka Waka'." },
       { submittedBy: "Admin", personName: "Jackie Chan", category: "Actors", country: "Hong Kong", achievementClue: "Famous worldwide for performing his own high-risk acrobatic stunts and slapstick martial arts choreography." }
     ];
+<<<<<<< HEAD
 
     let triviaData = JSON.parse(localStorage.getItem('guessThePersonData')) || defaultData;
     let currentCard = null;
@@ -454,6 +462,14 @@
       }
     }
 
+=======
+    // ==========================================
+
+    // Initialize data from LocalStorage or fall back to default fake data
+    let triviaData = JSON.parse(localStorage.getItem('guessThePersonData')) || defaultData;
+    let currentCard = null;
+
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
     function saveToLocalStorage() {
       localStorage.setItem('guessThePersonData', JSON.stringify(triviaData));
     }
@@ -540,7 +556,11 @@
 
       if (!userGuess) return;
 
+<<<<<<< HEAD
       if (userGuess === correctAnswer || (correctAnswer.includes(userGuess) && userGuess.length > 3)) {
+=======
+      if (userGuess === correctAnswer || correctAnswer.includes(userGuess) && userGuess.length > 3) {
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
         feedbackEl.innerText = `Correct! It's ${currentCard.personName}!`;
         feedbackEl.className = 'guess-feedback correct';
         revealAnswer();
@@ -555,7 +575,11 @@
       document.getElementById('revealBtn').style.display = 'none';
     }
 
+<<<<<<< HEAD
     async function handleFormSubmit(e) {
+=======
+    function handleFormSubmit(e) {
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
       e.preventDefault();
       
       const submitterName = document.getElementById('submitterName').value.trim();
@@ -572,6 +596,7 @@
 
       errorEl.style.display = 'none';
 
+<<<<<<< HEAD
       const newEntry = {
         submitted_by: submitterName,
         person_name: personName,
@@ -590,6 +615,9 @@
       }
 
       // 2. Local fallback update
+=======
+      // Save row to array & local storage
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
       triviaData.push({
         submittedBy: submitterName,
         personName: personName,
@@ -602,9 +630,19 @@
       // Clear form
       document.getElementById('triviaForm').reset();
 
+<<<<<<< HEAD
       alert('Trivia clue added successfully and saved to Supabase!');
       switchTab('play');
     }
+=======
+      // Alert & switch view back to game
+      alert('Trivia clue added successfully!');
+      switchTab('play');
+    }
+
+    // Initialize initial game view
+    filterAndPickRandom();
+>>>>>>> d437b28d9fc3e256a2a801977dd9434c26763d1d
   </script>
 </body>
 </html>
