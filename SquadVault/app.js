@@ -1,0 +1,1 @@
+console.log("SquadVault app ready.");
