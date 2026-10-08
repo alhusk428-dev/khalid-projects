@@ -4,6 +4,221 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SquadVault</title>
+  <style>
+    :root {
+      --primary-color: #0d1b2a;
+      --secondary-color: #1b263b;
+      --accent-color: #00b4d8;
+      --accent-hover: #90e0ef;
+      --text-color: #e0e1dd;
+      --danger-color: #e63946;
+      --card-bg: #111e2e;
+      --input-bg: #0d1520;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--primary-color);
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: var(--secondary-color);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--accent-color);
+      text-decoration: none;
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    button {
+      background-color: var(--accent-color);
+      color: var(--primary-color);
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    button.btn-secondary {
+      background-color: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--accent-color);
+    }
+
+    button.btn-secondary:hover {
+      background-color: rgba(0, 180, 216, 0.1);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+    }
+
+    .auth-container {
+      background-color: var(--card-bg);
+      padding: 2.5rem;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    .auth-container h2 {
+      margin-bottom: 1.5rem;
+      text-align: center;
+      color: #fff;
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      color: #a0aab2;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #2a3a4e;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      font-size: 1rem;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .auth-btn {
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .divider {
+      text-align: center;
+      margin: 1.5rem 0;
+      position: relative;
+    }
+
+    .divider::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background-color: #2a3a4e;
+      z-index: 1;
+    }
+
+    .divider span {
+      position: relative;
+      background-color: var(--card-bg);
+      padding: 0 0.8rem;
+      z-index: 2;
+      color: #808e9b;
+      font-size: 0.85rem;
+    }
+
+    .github-btn {
+      width: 100%;
+      background-color: #24292e;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .github-btn:hover {
+      background-color: #333;
+    }
+
+    .toggle-auth {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+      color: #a0aab2;
+    }
+
+    .toggle-auth a {
+      color: var(--accent-color);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .toggle-auth a:hover {
+      text-decoration: underline;
+    }
+
+    .error-message {
+      background-color: rgba(230, 57, 70, 0.15);
+      border: 1px solid var(--danger-color);
+      color: #ff8080;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+      display: none;
+    }
+
+    .password-hint {
+      font-size: 0.75rem;
+      color: #808e9b;
+      margin-top: 0.3rem;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .dashboard-view {
+      width: 100%;
+      max-width: 900px;
+      text-align: center;
+    }
+  </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js" defer></script>
   <script src="app.js" defer></script>
