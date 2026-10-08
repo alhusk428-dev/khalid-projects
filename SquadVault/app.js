@@ -95,6 +95,7 @@ function attachEventListeners() {
 
   if (signoutBtn) {
     signoutBtn.addEventListener("click", async () => {
+      if (!supabase) return;
       await supabase.auth.signOut();
     });
   }
@@ -123,6 +124,11 @@ function showError(message) {
 async function handleFormSubmit(e) {
   e.preventDefault();
 
+  if (!supabase) {
+    showError("Please update config.js with your real Supabase URL and key to log in.");
+    return;
+  }
+
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
 
@@ -149,6 +155,11 @@ async function handleFormSubmit(e) {
 
 // GitHub Auth Handler
 async function handleGitHubSignIn() {
+  if (!supabase) {
+    showError("Please update config.js with your real Supabase URL and key to enable OAuth.");
+    return;
+  }
+
   const { error } = await supabase.auth.signInWithOAuth({ provider: "github" });
   if (error) {
     showError(error.message);
@@ -157,6 +168,12 @@ async function handleGitHubSignIn() {
 
 // Auth Listener
 function initAuthListener() {
+  if (!supabase) {
+    console.warn("Supabase is not configured yet. Rendering interface without active backend connection.");
+    renderApp();
+    return;
+  }
+
   supabase.auth.onAuthStateChange((event, session) => {
     currentUser = session && session.user ? session.user : null;
     renderApp();
