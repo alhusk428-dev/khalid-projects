@@ -1,3 +1,4 @@
+var supabase = window.supabaseClient || window.supabase;
 console.log("SquadVault app ready.");
 
 // App State
