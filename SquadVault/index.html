@@ -4,140 +4,135 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SquadVault</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-dark: #0b0e17;
+      --bg: #0b0e17;
       --card-bg: rgba(20, 26, 43, 0.85);
-      --accent-purple: #7b2cbf;
+      --accent: #7b2cbf;
       --accent-glow: #9d4edd;
-      --text-main: #f8f9fa;
-      --text-muted: #a0aab8;
+      --text: #f8f9fa;
+      --muted: #a0aab8;
       --border: rgba(157, 78, 221, 0.3);
+      --input-bg: rgba(10, 14, 26, 0.7);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
+      background-color: var(--bg);
+      color: var(--text);
       font-family: 'Inter', sans-serif;
       min-height: 100vh;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
+      justify-content: center;
       padding: 1.5rem;
+      background-image: radial-gradient(circle at 50% 0%, rgba(157, 78, 221, 0.2), transparent 70%);
     }
 
-    #app {
+    header {
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
     }
 
-    .auth-card {
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+
+    .auth-container, .dashboard-container {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 2.5rem;
       width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      backdrop-filter: blur(10px);
+      max-width: 440px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
     }
 
-    .auth-header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-
-    .auth-header h1 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .auth-header p {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-top: 0.5rem;
-    }
-
-    .input-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .input-group label {
-      display: block;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 0.5rem;
-    }
-
-    .input-group input {
+    h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; text-align: center; }
+    
+    .input-group { margin-bottom: 1.2rem; }
+    .input-group label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; font-weight: 500; }
+    
+    input[type="text"], input[type="email"], input[type="password"] {
       width: 100%;
-      padding: 0.85rem;
-      background: rgba(10, 14, 26, 0.6);
+      padding: 0.85rem 1rem;
+      background: var(--input-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: #fff;
       font-size: 0.95rem;
       outline: none;
+      transition: all 0.2s ease;
     }
 
-    .btn-submit {
+    input:focus { border-color: var(--accent-glow); box-shadow: 0 0 12px rgba(157, 78, 221, 0.4); }
+
+    .help-text { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; line-height: 1.4; }
+
+    button {
       width: 100%;
       padding: 0.85rem;
-      background: linear-gradient(135deg, var(--accent-purple), var(--accent-glow));
+      background: linear-gradient(135deg, var(--accent), var(--accent-glow));
       color: #fff;
       border: none;
       border-radius: 8px;
       font-weight: 600;
+      font-size: 0.95rem;
       cursor: pointer;
-      margin-top: 1rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 0.8rem;
     }
 
-    .toggle-auth {
-      text-align: center;
-      margin-top: 1.5rem;
+    button:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(157, 78, 221, 0.4); }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: auto;
+      padding: 0.4rem 0.9rem;
       font-size: 0.85rem;
-      color: var(--text-muted);
+      margin-top: 0;
     }
 
-    .toggle-auth a {
-      color: var(--accent-glow);
-      text-decoration: none;
-      font-weight: 600;
+    .btn-github {
+      background: #24292e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
     }
+
+    .divider {
+      text-align: center;
+      margin: 1.2rem 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      position: relative;
+    }
+
+    .toggle-auth { text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted); }
+    .toggle-auth a { color: var(--accent-glow); text-decoration: none; font-weight: 600; }
+
+    .hidden { display: none !important; }
+    .error-message { color: #ff4d4d; font-size: 0.85rem; margin-bottom: 1rem; text-align: center; }
   </style>
 </head>
 <body>
 
-  <div id="app">
-    <div class="auth-card">
-      <div class="auth-header">
-        <h1>SquadVault</h1>
-        <p>Sign in to access your squad</p>
-      </div>
-
-      <form id="authForm">
-        <div class="input-group">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" placeholder="name@example.com" required>
-        </div>
-
-        <div class="input-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" placeholder="••••••••" required>
-        </div>
-
-        <button type="submit" class="btn-submit">Sign In</button>
-      </form>
-
-      <div class="toggle-auth">
-        <span>Don't have an account?</span>
-        <a href="#">Sign Up</a>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
