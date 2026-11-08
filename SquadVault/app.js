@@ -51,6 +51,17 @@ function renderAuthSection() {
         <button type="submit">${isSignUpMode ? 'Sign Up' : 'Sign In'}</button>
       </form>
 
+      <div style="margin: 1.2rem 0; text-align: center; color: var(--muted); font-size: 0.85rem; position: relative;">
+        <span>OR</span>
+      </div>
+
+      <button id="github-login-btn" class="btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: #24292e; color: #fff; border: 1px solid rgba(255,255,255,0.1);">
+        <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        Sign in with GitHub
+      </button>
+
       <div class="toggle-auth">
         <span>${isSignUpMode ? 'Already have an account?' : "Don't have an account?"}</span>
         <a href="#" id="toggle-auth-btn">${isSignUpMode ? 'Sign In' : 'Sign Up'}</a>
@@ -126,7 +137,7 @@ function renderDashboardSection() {
       <!-- Active Squad Vault -->
       ${activeSquad ? `
         <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
-          <div style="display:flex; justify-size:space-between; align-items:center; margin-bottom:1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
             <h3>${activeSquad.name} Vault</h3>
             <span style="font-size:0.75rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:0.2rem 0.5rem; border-radius:4px;">
               Invite Code: <strong>${activeSquad.invite_code}</strong>
@@ -161,6 +172,7 @@ function renderDashboardSection() {
 function attachEventListeners() {
   const toggleBtn = document.getElementById("toggle-auth-btn");
   const authForm = document.getElementById("auth-form");
+  const githubBtn = document.getElementById("github-login-btn");
   const profileForm = document.getElementById("profile-form");
   const createSquadForm = document.getElementById("create-squad-form");
   const joinSquadForm = document.getElementById("join-squad-form");
@@ -191,6 +203,20 @@ function attachEventListeners() {
       } else {
         currentUser = result.data.user;
         await loadUserData();
+      }
+    });
+  }
+
+  if (githubBtn) {
+    githubBtn.addEventListener("click", async () => {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: 'https://alhusk428-dev.github.io/khalid-projects/SquadVault/'
+        }
+      });
+      if (error) {
+        document.getElementById("auth-error").innerText = error.message;
       }
     });
   }
@@ -283,12 +309,10 @@ async function fetchSquadPosts(squadId) {
 async function loadUserData() {
   if (!currentUser) return;
 
-  // Profile Fetch
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
   currentProfile = profile;
 
   if (profile) {
-    // Squads Fetch
     const { data: memberEntries } = await supabase.from('squad_members').select('squad_id').eq('user_id', currentUser.id);
     if (memberEntries && memberEntries.length > 0) {
       const squadIds = memberEntries.map(m => m.squad_id);
