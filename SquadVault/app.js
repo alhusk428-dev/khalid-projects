@@ -13,14 +13,9 @@ function renderApp() {
   if (!appContainer) return;
 
   appContainer.innerHTML = `
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <a href="../" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem;">
-          ← Projects Hub
-        </a>
-        <a href="#" class="logo">SquadVault</a>
-      </div>
-      <div id="nav-actions" style="display: flex; align-items: center; gap: 1rem;">
+    <header>
+      <a href="#" class="logo">SquadVault</a>
+      <div id="nav-actions">
         <span id="user-display" class="${currentUser ? '' : 'hidden'}">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
         </span>
