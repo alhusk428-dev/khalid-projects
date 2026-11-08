@@ -7,17 +7,25 @@ let userSquads = [];
 let activeSquad = null;
 let squadPosts = [];
 
+// Admin/Mod State
+let activeAdminTab = 'users'; // 'users' | 'logs'
+let allProfilesList = [];
+let auditLogsList = [];
+
 // Main Render Loop
 function renderApp() {
   const appContainer = document.getElementById("app");
   if (!appContainer) return;
 
+  const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
+
   appContainer.innerHTML = `
-    <header>
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
       <a href="#" class="logo">SquadVault</a>
-      <div id="nav-actions">
+      <div id="nav-actions" style="display: flex; align-items: center; gap: 1rem;">
         <span id="user-display" class="${currentUser ? '' : 'hidden'}">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
+          ${isStaff ? `<span style="font-size:0.7rem; background:${currentProfile.role === 'admin' ? '#ff4757' : '#ffa502'}; color:#fff; padding:2px 6px; border-radius:4px; text-transform:uppercase;">${currentProfile.role}</span>` : ''}
         </span>
         <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}">Sign Out</button>
       </div>
@@ -96,12 +104,18 @@ function renderDashboardSection() {
     `;
   }
 
+  const isAdmin = currentProfile?.role === 'admin';
+  const isMod = currentProfile?.role === 'mod';
+  const isStaff = isAdmin || isMod;
+
   return `
-    <div class="dashboard-container" style="max-width: 600px;">
+    <div class="dashboard-container" style="max-width: 750px;">
       <h2>Welcome, @${currentProfile.username}!</h2>
       <p style="color: var(--muted); text-align: center; margin-bottom: 1.5rem;">
         Select a squad or start a new one to unlock your shared vault.
       </p>
+
+      ${isStaff ? renderStaffPanel(isAdmin) : ''}
 
       <!-- Squad Management -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
@@ -162,8 +176,13 @@ function renderDashboardSection() {
           <div style="display:flex; flex-direction:column; gap:0.8rem; max-height:300px; overflow-y:auto;">
             ${squadPosts.length > 0 ? squadPosts.map(p => `
               <div style="background:rgba(10,14,26,0.5); padding:0.8rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-                <div style="font-size:0.75rem; color:var(--accent-glow); margin-bottom:0.2rem;">
-                  @${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+                  <span style="font-size:0.75rem; color:var(--accent-glow);">
+                    @${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                  ${(isStaff || p.user_id === currentUser?.id) ? `
+                    <button class="delete-post-btn" data-post-id="${p.id}" data-author="${p.profiles?.username || 'user'}" style="background:none; border:none; color:#ff4757; font-size:0.75rem; cursor:pointer; padding:0;">Delete</button>
+                  ` : ''}
                 </div>
                 <div style="font-size:0.9rem;">${p.content}</div>
               </div>
@@ -171,6 +190,78 @@ function renderDashboardSection() {
           </div>
         </div>
       ` : ''}
+    </div>
+  `;
+}
+
+function renderStaffPanel(isAdmin) {
+  return `
+    <div style="background: rgba(10,14,26,0.8); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.8rem;">
+        <h3 style="margin:0; font-size: 1.05rem;">🛡️ Staff Control Center</h3>
+        ${isAdmin ? `
+          <div style="display:flex; gap:0.5rem;">
+            <button id="tab-users-btn" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Users & Roles</button>
+            <button id="tab-logs-btn" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Audit Logs</button>
+          </div>
+        ` : ''}
+      </div>
+
+      ${activeAdminTab === 'users' ? renderUsersTab(isAdmin) : renderAuditLogsTab()}
+    </div>
+  `;
+}
+
+function renderUsersTab(isAdmin) {
+  return `
+    <div style="max-height: 220px; overflow-y: auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--muted);">
+            <th style="padding:0.4rem;">User</th>
+            <th style="padding:0.4rem;">Role</th>
+            <th style="padding:0.4rem; text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allProfilesList.map(u => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:0.4rem;">@${u.username || 'Anonymous'}</td>
+              <td style="padding:0.4rem;">
+                <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#ff4757' : (u.role === 'mod' ? '#ffa502' : 'rgba(255,255,255,0.1)')};">
+                  ${u.role || 'user'}
+                </span>
+              </td>
+              <td style="padding:0.4rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
+                ${isAdmin && u.id !== currentUser.id ? `
+                  ${u.role === 'mod' ? `
+                    <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Demote to User</button>
+                  ` : `
+                    <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ffa502; color:#000;">Make Mod</button>
+                  `}
+                ` : ''}
+                ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
+                  <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer;">Remove</button>
+                ` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderAuditLogsTab() {
+  return `
+    <div style="max-height: 220px; overflow-y: auto; font-size:0.8rem;">
+      ${auditLogsList.length > 0 ? auditLogsList.map(log => `
+        <div style="border-bottom:1px solid rgba(255,255,255,0.05); padding:0.4rem 0;">
+          <strong style="color:var(--accent-glow);">${log.action}</strong> by 
+          <em>@${log.profiles?.username || 'Staff'}</em>: ${log.target_info}
+          <div style="font-size:0.7rem; color:var(--muted);">${new Date(log.created_at).toLocaleString()}</div>
+        </div>
+      `).join('') : '<p style="color:var(--muted); font-size:0.8rem;">No audit records logged yet.</p>'}
     </div>
   `;
 }
@@ -184,6 +275,24 @@ function attachEventListeners() {
   const joinSquadForm = document.getElementById("join-squad-form");
   const postForm = document.getElementById("post-form");
   const signoutBtn = document.getElementById("signout-btn");
+
+  const tabUsersBtn = document.getElementById("tab-users-btn");
+  const tabLogsBtn = document.getElementById("tab-logs-btn");
+
+  if (tabUsersBtn) {
+    tabUsersBtn.addEventListener("click", () => {
+      activeAdminTab = 'users';
+      renderApp();
+    });
+  }
+
+  if (tabLogsBtn) {
+    tabLogsBtn.addEventListener("click", async () => {
+      activeAdminTab = 'logs';
+      await fetchAuditLogs();
+      renderApp();
+    });
+  }
 
   if (toggleBtn) {
     toggleBtn.addEventListener("click", (e) => {
@@ -231,7 +340,7 @@ function attachEventListeners() {
     profileForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const username = document.getElementById("username").value.trim();
-      const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, username });
+      const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, username, role: 'user' });
       if (error) {
         document.getElementById("profile-error").innerText = error.message;
       } else {
@@ -281,6 +390,54 @@ function attachEventListeners() {
     });
   }
 
+  // Delete Post Handlers
+  document.querySelectorAll('.delete-post-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const postId = e.target.getAttribute('data-post-id');
+      const author = e.target.getAttribute('data-author');
+
+      await supabase.from('posts').delete().eq('id', postId);
+
+      if (currentProfile?.role === 'admin' || currentProfile?.role === 'mod') {
+        await logStaffAction('DELETE_POST', `Deleted post authored by @${author}`);
+      }
+
+      if (activeSquad) await fetchSquadPosts(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Role Management Handlers (Admin Only)
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetId = e.target.getAttribute('data-id');
+      const newRole = e.target.getAttribute('data-role');
+      const targetName = e.target.getAttribute('data-name');
+
+      await supabase.from('profiles').update({ role: newRole }).eq('id', targetId);
+      await logStaffAction('UPDATE_ROLE', `Changed @${targetName}'s role to ${newRole}`);
+      await fetchStaffData();
+      renderApp();
+    });
+  });
+
+  // User Removal Handlers (Mods & Admins)
+  document.querySelectorAll('.remove-user-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetId = e.target.getAttribute('data-id');
+      const targetName = e.target.getAttribute('data-name');
+
+      if (confirm(`Remove @${targetName} profile and posts?`)) {
+        await supabase.from('posts').delete().eq('user_id', targetId);
+        await supabase.from('squad_members').delete().eq('user_id', targetId);
+        await supabase.from('profiles').delete().eq('id', targetId);
+        await logStaffAction('REMOVE_USER', `Removed user account @${targetName}`);
+        await fetchStaffData();
+        renderApp();
+      }
+    });
+  });
+
   document.querySelectorAll('.btn-squad-select').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const squadId = e.target.getAttribute('data-squad-id');
@@ -303,6 +460,34 @@ function attachEventListeners() {
   }
 }
 
+async function logStaffAction(action, target_info) {
+  if (!currentUser) return;
+  await supabase.from('audit_logs').insert({
+    action,
+    performed_by_id: currentUser.id,
+    target_info
+  });
+}
+
+async function fetchAuditLogs() {
+  const { data } = await supabase
+    .from('audit_logs')
+    .select('*, profiles:performed_by_id(username)')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  auditLogsList = data || [];
+}
+
+async function fetchStaffData() {
+  if (currentProfile?.role === 'admin' || currentProfile?.role === 'mod') {
+    const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    allProfilesList = profiles || [];
+    if (currentProfile?.role === 'admin') {
+      await fetchAuditLogs();
+    }
+  }
+}
+
 async function fetchSquadPosts(squadId) {
   const { data } = await supabase
     .from('posts')
@@ -319,6 +504,8 @@ async function loadUserData() {
   currentProfile = profile;
 
   if (profile) {
+    await fetchStaffData();
+
     const { data: memberEntries } = await supabase.from('squad_members').select('squad_id').eq('user_id', currentUser.id);
     if (memberEntries && memberEntries.length > 0) {
       const squadIds = memberEntries.map(m => m.squad_id);
