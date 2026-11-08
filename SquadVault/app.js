@@ -6,14 +6,23 @@ let currentProfile = null;
 let userSquads = [];
 let activeSquad = null;
 let squadPosts = [];
+let squadMembers = [];
 
 // Admin/Mod State
 let isModModalOpen = false;
-let activeAdminTab = 'users'; // 'users' | 'logs' | 'stats'
+let activeAdminTab = 'users'; // 'users' | 'logs'
 let userSearchQuery = '';
 let allProfilesList = [];
 let auditLogsList = [];
 let systemStats = { users: 0, squads: 0, posts: 0 };
+
+// Helper: Convert links to clickable anchors
+function formatPostContent(content) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return content.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-glow, #a855f7); text-decoration: underline;">${url}</a>`;
+  });
+}
 
 // Main Render Loop
 function renderApp() {
@@ -23,16 +32,22 @@ function renderApp() {
   const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
 
   appContainer.innerHTML = `
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; position: relative;">
       <a href="#" class="logo">SquadVault</a>
+      
+      <!-- Sleek Centered Staff Button -->
+      ${isStaff ? `
+        <div style="position: absolute; left: 50%; transform: translateX(-50%);">
+          <button id="open-mod-modal-btn" class="btn-secondary" style="padding: 0.35rem 0.9rem; font-size: 0.8rem; border-radius: 20px; border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #a855f7;"></span>
+            Staff Control Center
+          </button>
+        </div>
+      ` : ''}
+
       <div id="nav-actions" style="display: flex; align-items: center; gap: 1rem;">
-        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="display:flex; align-items:center; gap:0.5rem;">
+        <span id="user-display" class="${currentUser ? '' : 'hidden'}">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
-          ${isStaff ? `
-            <button id="open-mod-modal-btn" style="font-size:0.7rem; background:${currentProfile.role === 'admin' ? '#ff4757' : '#ffa502'}; color:#fff; padding:2px 8px; border-radius:4px; text-transform:uppercase; border:none; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:0.2rem;">
-              🛡️ ${currentProfile.role}
-            </button>
-          ` : ''}
         </span>
         <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}">Sign Out</button>
       </div>
@@ -116,7 +131,7 @@ function renderDashboardSection() {
   const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
 
   return `
-    <div class="dashboard-container" style="max-width: 600px;">
+    <div class="dashboard-container" style="max-width: 650px;">
       <h2>Welcome, @${currentProfile.username}!</h2>
       <p style="color: var(--muted); text-align: center; margin-bottom: 1.5rem;">
         Select a squad or start a new one to unlock your shared vault.
@@ -162,11 +177,16 @@ function renderDashboardSection() {
       <!-- Active Squad Vault -->
       ${activeSquad ? `
         <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
             <h3>${activeSquad.name} Vault</h3>
             <span style="font-size:0.75rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:0.2rem 0.5rem; border-radius:4px;">
               Invite Code: <strong>${activeSquad.invite_code}</strong>
             </span>
+          </div>
+
+          <!-- Members List -->
+          <div style="margin-bottom: 1rem; font-size: 0.78rem; color: var(--muted);">
+            Members: ${squadMembers.map(m => `@${m.profiles?.username || 'User'}`).join(', ') || 'Loading members...'}
           </div>
 
           <!-- Post Input -->
@@ -189,7 +209,7 @@ function renderDashboardSection() {
                     <button class="delete-post-btn" data-post-id="${p.id}" data-author="${p.profiles?.username || 'user'}" style="background:none; border:none; color:#ff4757; font-size:0.75rem; cursor:pointer; padding:0;">Delete</button>
                   ` : ''}
                 </div>
-                <div style="font-size:0.9rem;">${p.content}</div>
+                <div style="font-size:0.9rem; word-break: break-word;">${formatPostContent(p.content)}</div>
               </div>
             `).join('') : '<p style="font-size:0.85rem; color:var(--muted); text-align:center;">No posts in this vault yet.</p>'}
           </div>
@@ -210,8 +230,8 @@ function renderModModal(isAdmin) {
         
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem;">
-            🛡️ Staff Control Center
+          <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">
+            Staff Control Center
           </h3>
           <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;">✕</button>
         </div>
@@ -247,7 +267,7 @@ function renderModModal(isAdmin) {
         <!-- Modal Content Body -->
         ${activeAdminTab === 'users' ? `
           <div style="margin-bottom: 0.8rem;">
-            <input type="text" id="mod-user-search" placeholder="🔍 Search username..." value="${userSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
+            <input type="text" id="mod-user-search" placeholder="Search username..." value="${userSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
           </div>
           <div style="max-height: 250px; overflow-y: auto;">
             <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
@@ -263,7 +283,7 @@ function renderModModal(isAdmin) {
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                     <td style="padding:0.4rem;">@${u.username || 'Anonymous'}</td>
                     <td style="padding:0.4rem;">
-                      <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#ff4757' : (u.role === 'mod' ? '#ffa502' : 'rgba(255,255,255,0.1)')};">
+                      <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#a855f7' : (u.role === 'mod' ? '#3b82f6' : 'rgba(255,255,255,0.1)')};">
                         ${u.role || 'user'}
                       </span>
                     </td>
@@ -272,7 +292,7 @@ function renderModModal(isAdmin) {
                         ${u.role === 'mod' ? `
                           <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Demote</button>
                         ` : `
-                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ffa502; color:#000;">Make Mod</button>
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#fff;">Make Mod</button>
                         `}
                       ` : ''}
                       ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
@@ -362,7 +382,6 @@ function attachEventListeners() {
     userSearchInput.addEventListener("input", (e) => {
       userSearchQuery = e.target.value;
       renderApp();
-      // Keep focus on input after re-render
       const newInput = document.getElementById("mod-user-search");
       if (newInput) {
         newInput.focus();
@@ -461,13 +480,16 @@ function attachEventListeners() {
       const content = document.getElementById("post-content").value.trim();
       if (!content || !activeSquad) return;
 
-      await supabase.from('posts').insert({ squad_id: activeSquad.id, user_id: currentUser.id, content });
-      document.getElementById("post-content").value = "";
-      await fetchSquadPosts(activeSquad.id);
+      const { error } = await supabase.from('posts').insert({ squad_id: activeSquad.id, user_id: currentUser.id, content });
+      if (error) {
+        console.error("Post creation error:", error.message);
+      } else {
+        document.getElementById("post-content").value = "";
+        await fetchSquadPosts(activeSquad.id);
+      }
     });
   }
 
-  // Delete Post Handlers
   document.querySelectorAll('.delete-post-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const postId = e.target.getAttribute('data-post-id');
@@ -484,7 +506,6 @@ function attachEventListeners() {
     });
   });
 
-  // Role Management Handlers (Admin Only)
   document.querySelectorAll('.role-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const targetId = e.target.getAttribute('data-id');
@@ -498,7 +519,6 @@ function attachEventListeners() {
     });
   });
 
-  // User Removal Handlers (Mods & Admins)
   document.querySelectorAll('.remove-user-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const targetId = e.target.getAttribute('data-id');
@@ -520,6 +540,7 @@ function attachEventListeners() {
       const squadId = e.target.getAttribute('data-squad-id');
       activeSquad = userSquads.find(s => s.id === squadId);
       await fetchSquadPosts(squadId);
+      await fetchSquadMembers(squadId);
       renderApp();
     });
   });
@@ -532,6 +553,7 @@ function attachEventListeners() {
       userSquads = [];
       activeSquad = null;
       squadPosts = [];
+      squadMembers = [];
       isModModalOpen = false;
       renderApp();
     });
@@ -561,7 +583,6 @@ async function fetchStaffData() {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     allProfilesList = profiles || [];
     
-    // Fetch metrics
     const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
     const { count: squadCount } = await supabase.from('squads').select('*', { count: 'exact', head: true });
     const { count: postCount } = await supabase.from('posts').select('*', { count: 'exact', head: true });
@@ -572,6 +593,14 @@ async function fetchStaffData() {
       await fetchAuditLogs();
     }
   }
+}
+
+async function fetchSquadMembers(squadId) {
+  const { data } = await supabase
+    .from('squad_members')
+    .select('user_id, profiles(username)')
+    .eq('squad_id', squadId);
+  squadMembers = data || [];
 }
 
 async function fetchSquadPosts(squadId) {
@@ -598,6 +627,7 @@ async function loadUserData() {
       if (!activeSquad && userSquads.length > 0) {
         activeSquad = userSquads[0];
         await fetchSquadPosts(activeSquad.id);
+        await fetchSquadMembers(activeSquad.id);
       }
     }
   }
