@@ -13,9 +13,14 @@ function renderApp() {
   if (!appContainer) return;
 
   appContainer.innerHTML = `
-    <header>
-      <a href="#" class="logo">SquadVault</a>
-      <div id="nav-actions">
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <a href="../" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem;">
+          ← Projects Hub
+        </a>
+        <a href="#" class="logo">SquadVault</a>
+      </div>
+      <div id="nav-actions" style="display: flex; align-items: center; gap: 1rem;">
         <span id="user-display" class="${currentUser ? '' : 'hidden'}">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
         </span>
@@ -65,6 +70,12 @@ function renderAuthSection() {
       <div class="toggle-auth">
         <span>${isSignUpMode ? 'Already have an account?' : "Don't have an account?"}</span>
         <a href="#" id="toggle-auth-btn">${isSignUpMode ? 'Sign In' : 'Sign Up'}</a>
+      </div>
+
+      <div style="margin-top: 1.2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;">
+        <a href="../" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">
+          ← Back to Hub
+        </a>
       </div>
     </div>
   `;
