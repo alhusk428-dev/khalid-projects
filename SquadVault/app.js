@@ -8,9 +8,12 @@ let activeSquad = null;
 let squadPosts = [];
 
 // Admin/Mod State
-let activeAdminTab = 'users'; // 'users' | 'logs'
+let isModModalOpen = false;
+let activeAdminTab = 'users'; // 'users' | 'logs' | 'stats'
+let userSearchQuery = '';
 let allProfilesList = [];
 let auditLogsList = [];
+let systemStats = { users: 0, squads: 0, posts: 0 };
 
 // Main Render Loop
 function renderApp() {
@@ -23,9 +26,13 @@ function renderApp() {
     <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
       <a href="#" class="logo">SquadVault</a>
       <div id="nav-actions" style="display: flex; align-items: center; gap: 1rem;">
-        <span id="user-display" class="${currentUser ? '' : 'hidden'}">
+        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="display:flex; align-items:center; gap:0.5rem;">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
-          ${isStaff ? `<span style="font-size:0.7rem; background:${currentProfile.role === 'admin' ? '#ff4757' : '#ffa502'}; color:#fff; padding:2px 6px; border-radius:4px; text-transform:uppercase;">${currentProfile.role}</span>` : ''}
+          ${isStaff ? `
+            <button id="open-mod-modal-btn" style="font-size:0.7rem; background:${currentProfile.role === 'admin' ? '#ff4757' : '#ffa502'}; color:#fff; padding:2px 8px; border-radius:4px; text-transform:uppercase; border:none; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:0.2rem;">
+              🛡️ ${currentProfile.role}
+            </button>
+          ` : ''}
         </span>
         <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}">Sign Out</button>
       </div>
@@ -34,6 +41,8 @@ function renderApp() {
     <main>
       ${!currentUser ? renderAuthSection() : renderDashboardSection()}
     </main>
+
+    ${isModModalOpen && isStaff ? renderModModal(currentProfile.role === 'admin') : ''}
   `;
 
   attachEventListeners();
@@ -104,18 +113,14 @@ function renderDashboardSection() {
     `;
   }
 
-  const isAdmin = currentProfile?.role === 'admin';
-  const isMod = currentProfile?.role === 'mod';
-  const isStaff = isAdmin || isMod;
+  const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
 
   return `
-    <div class="dashboard-container" style="max-width: 750px;">
+    <div class="dashboard-container" style="max-width: 600px;">
       <h2>Welcome, @${currentProfile.username}!</h2>
       <p style="color: var(--muted); text-align: center; margin-bottom: 1.5rem;">
         Select a squad or start a new one to unlock your shared vault.
       </p>
-
-      ${isStaff ? renderStaffPanel(isAdmin) : ''}
 
       <!-- Squad Management -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
@@ -194,74 +199,104 @@ function renderDashboardSection() {
   `;
 }
 
-function renderStaffPanel(isAdmin) {
-  return `
-    <div style="background: rgba(10,14,26,0.8); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.8rem;">
-        <h3 style="margin:0; font-size: 1.05rem;">🛡️ Staff Control Center</h3>
-        ${isAdmin ? `
-          <div style="display:flex; gap:0.5rem;">
-            <button id="tab-users-btn" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Users & Roles</button>
-            <button id="tab-logs-btn" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Audit Logs</button>
-          </div>
-        ` : ''}
-      </div>
+function renderModModal(isAdmin) {
+  const filteredUsers = allProfilesList.filter(u => 
+    (u.username || '').toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
 
-      ${activeAdminTab === 'users' ? renderUsersTab(isAdmin) : renderAuditLogsTab()}
-    </div>
-  `;
-}
-
-function renderUsersTab(isAdmin) {
   return `
-    <div style="max-height: 220px; overflow-y: auto;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-        <thead>
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--muted);">
-            <th style="padding:0.4rem;">User</th>
-            <th style="padding:0.4rem;">Role</th>
-            <th style="padding:0.4rem; text-align:right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${allProfilesList.map(u => `
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-              <td style="padding:0.4rem;">@${u.username || 'Anonymous'}</td>
-              <td style="padding:0.4rem;">
-                <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#ff4757' : (u.role === 'mod' ? '#ffa502' : 'rgba(255,255,255,0.1)')};">
-                  ${u.role || 'user'}
-                </span>
-              </td>
-              <td style="padding:0.4rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
-                ${isAdmin && u.id !== currentUser.id ? `
-                  ${u.role === 'mod' ? `
-                    <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Demote to User</button>
-                  ` : `
-                    <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ffa502; color:#000;">Make Mod</button>
-                  `}
-                ` : ''}
-                ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
-                  <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer;">Remove</button>
-                ` : ''}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderAuditLogsTab() {
-  return `
-    <div style="max-height: 220px; overflow-y: auto; font-size:0.8rem;">
-      ${auditLogsList.length > 0 ? auditLogsList.map(log => `
-        <div style="border-bottom:1px solid rgba(255,255,255,0.05); padding:0.4rem 0;">
-          <strong style="color:var(--accent-glow);">${log.action}</strong> by 
-          <em>@${log.profiles?.username || 'Staff'}</em>: ${log.target_info}
-          <div style="font-size:0.7rem; color:var(--muted);">${new Date(log.created_at).toLocaleString()}</div>
+    <div id="modal-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 650px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem;">
+            🛡️ Staff Control Center
+          </h3>
+          <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;">✕</button>
         </div>
-      `).join('') : '<p style="color:var(--muted); font-size:0.8rem;">No audit records logged yet.</p>'}
+
+        <!-- Quick System Metrics Row -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1rem; text-align: center;">
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.users}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Total Users</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.squads}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Active Squads</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.posts}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Vault Posts</div>
+          </div>
+        </div>
+
+        <!-- Tab Selector -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <button id="modal-tab-users" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+            Users & Roles
+          </button>
+          ${isAdmin ? `
+            <button id="modal-tab-logs" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+              Audit Logs
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- Modal Content Body -->
+        ${activeAdminTab === 'users' ? `
+          <div style="margin-bottom: 0.8rem;">
+            <input type="text" id="mod-user-search" placeholder="🔍 Search username..." value="${userSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
+          </div>
+          <div style="max-height: 250px; overflow-y: auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--muted);">
+                  <th style="padding:0.4rem;">User</th>
+                  <th style="padding:0.4rem;">Role</th>
+                  <th style="padding:0.4rem; text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredUsers.map(u => `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:0.4rem;">@${u.username || 'Anonymous'}</td>
+                    <td style="padding:0.4rem;">
+                      <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#ff4757' : (u.role === 'mod' ? '#ffa502' : 'rgba(255,255,255,0.1)')};">
+                        ${u.role || 'user'}
+                      </span>
+                    </td>
+                    <td style="padding:0.4rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
+                      ${isAdmin && u.id !== currentUser.id ? `
+                        ${u.role === 'mod' ? `
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Demote</button>
+                        ` : `
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ffa502; color:#000;">Make Mod</button>
+                        `}
+                      ` : ''}
+                      ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
+                        <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer;">Remove</button>
+                      ` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div style="max-height: 280px; overflow-y: auto; font-size:0.8rem;">
+            ${auditLogsList.length > 0 ? auditLogsList.map(log => `
+              <div style="border-bottom:1px solid rgba(255,255,255,0.05); padding:0.5rem 0;">
+                <strong style="color:var(--accent-glow);">${log.action}</strong> by 
+                <em>@${log.profiles?.username || 'Staff'}</em>: ${log.target_info}
+                <div style="font-size:0.7rem; color:var(--muted);">${new Date(log.created_at).toLocaleString()}</div>
+              </div>
+            `).join('') : '<p style="color:var(--muted); font-size:0.8rem; text-align:center;">No audit records logged yet.</p>'}
+          </div>
+        `}
+
+      </div>
     </div>
   `;
 }
@@ -276,21 +311,63 @@ function attachEventListeners() {
   const postForm = document.getElementById("post-form");
   const signoutBtn = document.getElementById("signout-btn");
 
-  const tabUsersBtn = document.getElementById("tab-users-btn");
-  const tabLogsBtn = document.getElementById("tab-logs-btn");
+  const openModModalBtn = document.getElementById("open-mod-modal-btn");
+  const closeModModalBtn = document.getElementById("close-mod-modal-btn");
+  const modalBackdrop = document.getElementById("modal-backdrop");
 
-  if (tabUsersBtn) {
-    tabUsersBtn.addEventListener("click", () => {
+  const modalTabUsers = document.getElementById("modal-tab-users");
+  const modalTabLogs = document.getElementById("modal-tab-logs");
+  const userSearchInput = document.getElementById("mod-user-search");
+
+  if (openModModalBtn) {
+    openModModalBtn.addEventListener("click", async () => {
+      isModModalOpen = true;
+      await fetchStaffData();
+      renderApp();
+    });
+  }
+
+  if (closeModModalBtn) {
+    closeModModalBtn.addEventListener("click", () => {
+      isModModalOpen = false;
+      renderApp();
+    });
+  }
+
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener("click", (e) => {
+      if (e.target.id === 'modal-backdrop') {
+        isModModalOpen = false;
+        renderApp();
+      }
+    });
+  }
+
+  if (modalTabUsers) {
+    modalTabUsers.addEventListener("click", () => {
       activeAdminTab = 'users';
       renderApp();
     });
   }
 
-  if (tabLogsBtn) {
-    tabLogsBtn.addEventListener("click", async () => {
+  if (modalTabLogs) {
+    modalTabLogs.addEventListener("click", async () => {
       activeAdminTab = 'logs';
       await fetchAuditLogs();
       renderApp();
+    });
+  }
+
+  if (userSearchInput) {
+    userSearchInput.addEventListener("input", (e) => {
+      userSearchQuery = e.target.value;
+      renderApp();
+      // Keep focus on input after re-render
+      const newInput = document.getElementById("mod-user-search");
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+      }
     });
   }
 
@@ -427,7 +504,7 @@ function attachEventListeners() {
       const targetId = e.target.getAttribute('data-id');
       const targetName = e.target.getAttribute('data-name');
 
-      if (confirm(`Remove @${targetName} profile and posts?`)) {
+      if (confirm(`Remove @${targetName}'s profile and posts?`)) {
         await supabase.from('posts').delete().eq('user_id', targetId);
         await supabase.from('squad_members').delete().eq('user_id', targetId);
         await supabase.from('profiles').delete().eq('id', targetId);
@@ -455,6 +532,7 @@ function attachEventListeners() {
       userSquads = [];
       activeSquad = null;
       squadPosts = [];
+      isModModalOpen = false;
       renderApp();
     });
   }
@@ -482,6 +560,14 @@ async function fetchStaffData() {
   if (currentProfile?.role === 'admin' || currentProfile?.role === 'mod') {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     allProfilesList = profiles || [];
+    
+    // Fetch metrics
+    const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+    const { count: squadCount } = await supabase.from('squads').select('*', { count: 'exact', head: true });
+    const { count: postCount } = await supabase.from('posts').select('*', { count: 'exact', head: true });
+
+    systemStats = { users: userCount || 0, squads: squadCount || 0, posts: postCount || 0 };
+
     if (currentProfile?.role === 'admin') {
       await fetchAuditLogs();
     }
@@ -504,8 +590,6 @@ async function loadUserData() {
   currentProfile = profile;
 
   if (profile) {
-    await fetchStaffData();
-
     const { data: memberEntries } = await supabase.from('squad_members').select('squad_id').eq('user_id', currentUser.id);
     if (memberEntries && memberEntries.length > 0) {
       const squadIds = memberEntries.map(m => m.squad_id);
