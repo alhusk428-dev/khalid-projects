@@ -9,16 +9,26 @@ let squadPosts = [];
 let squadMembers = [];
 let squadPolls = [];
 let squadGoals = [];
+let activeAnnouncement = null;
 
-// Active Vault Tab: 'feed' | 'polls' | 'goals' | 'settings'
+// Active Vault Tab: 'feed' | 'raids' | 'games' | 'polls' | 'settings'
 let activeVaultTab = 'feed';
+
+// Mini-game local state
+let reactionState = 'idle'; // 'idle' | 'waiting' | 'ready' | 'done'
+let reactionStartTime = 0;
+let reactionTimeout = null;
+let lastReactionMs = null;
 
 // Modals & Admin State
 let isModModalOpen = false;
 let isPrivacyModalOpen = false;
-let activeAdminTab = 'users';
+let activeAdminTab = 'squads'; // 'squads' | 'users' | 'feed' | 'broadcast' | 'logs'
 let userSearchQuery = '';
+let squadSearchQuery = '';
 let allProfilesList = [];
+let allSquadsList = [];
+let globalRecentPosts = [];
 let auditLogsList = [];
 let systemStats = { users: 0, squads: 0, posts: 0 };
 
@@ -27,6 +37,13 @@ function formatPostContent(content) {
   return content.replace(urlRegex, (url) => {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: ${activeSquad?.theme_color || '#a855f7'}; text-decoration: underline;">${url}</a>`;
   });
+}
+
+function getSquadLevelInfo(xp = 0) {
+  const level = Math.floor(xp / 250) + 1;
+  const currentLevelXp = xp % 250;
+  const pct = Math.min(100, Math.round((currentLevelXp / 250) * 100));
+  return { level, currentLevelXp, nextLevelXp: 250, pct };
 }
 
 function renderApp() {
@@ -39,21 +56,23 @@ function renderApp() {
     <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
       <a href="#" class="logo">SquadVault</a>
       
-      <div id="nav-actions" style="display: flex; align-items: center; gap: 0.8rem;">
-        ${isStaff ? `
-          <button id="open-mod-modal-btn" class="btn-secondary" style="padding: 0.35rem 0.8rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.15); color: #fff; cursor: pointer;">
-            🛡️ Staff Panel
-          </button>
-        ` : ''}
-        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="font-size: 0.88rem;">
+      <div id="nav-actions" style="display: flex; align-items: center; gap: 0.9rem;">
+        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="font-size: 0.88rem; white-space: nowrap;">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
+          ${currentProfile?.xp !== undefined ? `<span style="color: var(--muted); font-size: 0.78rem; margin-left: 0.3rem;">(${currentProfile.xp} XP)</span>` : ''}
         </span>
-        <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">Sign Out</button>
+        <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; width: auto; margin: 0; white-space: nowrap;">Sign Out</button>
       </div>
     </header>
 
+    ${activeAnnouncement ? `
+      <div style="background: rgba(168, 85, 247, 0.16); border-top: 1px solid rgba(168, 85, 247, 0.4); border-bottom: 1px solid rgba(168, 85, 247, 0.4); padding: 0.55rem 1.5rem; text-align: center; font-size: 0.84rem; color: #fff;">
+        <strong>SYSTEM NOTICE:</strong> ${activeAnnouncement.message}
+      </div>
+    ` : ''}
+
     <main>
-      ${!currentUser ? renderAuthSection() : renderDashboardSection()}
+      ${!currentUser ? renderAuthSection() : renderDashboardSection(isStaff)}
     </main>
 
     ${isModModalOpen && isStaff ? renderModModal(currentProfile.role === 'admin') : ''}
@@ -107,7 +126,7 @@ function renderAuthSection() {
   `;
 }
 
-function renderDashboardSection() {
+function renderDashboardSection(isStaff) {
   if (!currentProfile?.username) {
     return `
       <div class="dashboard-container">
@@ -128,13 +147,27 @@ function renderDashboardSection() {
   }
 
   const theme = activeSquad?.theme_color || '#a855f7';
+  const levelInfo = getSquadLevelInfo(activeSquad?.xp || 0);
+  const isInspectingExternalSquad = activeSquad && !userSquads.some(s => s.id === activeSquad.id);
 
   return `
-    <div class="dashboard-container" style="max-width: 680px;">
-      <h2>Welcome, @${currentProfile.username}!</h2>
-      <p style="color: var(--muted); text-align: center; margin-bottom: 1.5rem;">
-        Select a squad or start a new one to unlock your shared vault.
-      </p>
+    <div class="dashboard-container" style="max-width: 720px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.5rem;">
+        <h2 style="margin: 0; text-align: left;">Welcome, @${currentProfile.username}!</h2>
+        ${isStaff ? `
+          <button id="open-mod-modal-btn" style="width: auto; margin: 0; padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: 8px; background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(168, 85, 247, 0.5); color: #fff; cursor: pointer; font-weight: 600;">
+            Staff Control Center
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- Live Status Bar -->
+      <div style="display: flex; gap: 0.5rem; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 0.55rem 0.8rem; border-radius: 8px; margin-bottom: 1.4rem;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex-shrink: 0;"></span>
+        <span style="font-size: 0.78rem; color: var(--muted); white-space: nowrap;">Your Move:</span>
+        <input type="text" id="user-status-input" value="${currentProfile.status || 'Online'}" placeholder="What are you playing or doing?" style="flex: 1; background: transparent; border: none; color: #fff; font-size: 0.82rem; padding: 0.2rem;">
+        <button id="save-status-btn" class="btn-secondary" style="width: auto; margin: 0; padding: 0.25rem 0.7rem; font-size: 0.75rem;">Update</button>
+      </div>
 
       <!-- Squad Creation & Join -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
@@ -176,50 +209,79 @@ function renderDashboardSection() {
       <!-- Active Squad Hub -->
       ${activeSquad ? `
         <div style="border-top: 2px solid ${theme}; padding-top: 1.2rem; margin-top: 1.2rem;">
-          <!-- Squad Banner Header -->
+          ${isInspectingExternalSquad ? `
+            <div style="background: rgba(59, 130, 246, 0.15); border: 1px solid #3b82f6; color: #93c5fd; padding: 0.5rem 0.8rem; border-radius: 6px; font-size: 0.78rem; margin-bottom: 0.9rem; display: flex; justify-content: space-between; align-items: center;">
+              <span>Owner Inspector Mode: Viewing external squad <strong>${activeSquad.name}</strong></span>
+              <button id="exit-inspect-btn" style="width: auto; margin: 0; padding: 0.2rem 0.6rem; font-size: 0.72rem; background: #3b82f6;">Exit View</button>
+            </div>
+          ` : ''}
+
+          <!-- Squad Banner Header + Level Bar -->
           <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 1rem; margin-bottom: 1.2rem;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap: 1rem; flex-wrap: wrap;">
               <div>
-                <h3 style="margin: 0; font-size: 1.25rem; color: #fff;">${activeSquad.name}</h3>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                  <h3 style="margin: 0; font-size: 1.25rem; color: #fff;">${activeSquad.name}</h3>
+                  <span style="font-size: 0.72rem; background: ${theme}; color: #fff; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                    LVL ${levelInfo.level}
+                  </span>
+                </div>
                 <p style="margin: 0.3rem 0 0.6rem; font-size: 0.85rem; color: var(--muted);">
                   ${activeSquad.description || 'Welcome to our shared squad vault!'}
                 </p>
               </div>
               <button id="copy-invite-btn" data-code="${activeSquad.invite_code}" style="width: auto; margin: 0; font-size: 0.75rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); padding: 0.35rem 0.7rem; border-radius: 6px; color: #fff; cursor: pointer;">
-                📋 Code: <strong>${activeSquad.invite_code}</strong>
+                Code: <strong>${activeSquad.invite_code}</strong>
               </button>
             </div>
-            <div style="font-size: 0.75rem; color: var(--muted); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem;">
-              👥 Members (${squadMembers.length || 1}): ${squadMembers.length > 0 ? squadMembers.map(m => `@${m.profiles?.username || 'User'}`).join(', ') : '@' + currentProfile.username}
+
+            <!-- XP Progress Bar -->
+            <div style="margin: 0.4rem 0 0.7rem;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.25rem;">
+                <span>Squad XP Progress</span>
+                <span>${levelInfo.currentLevelXp} / ${levelInfo.nextLevelXp} XP</span>
+              </div>
+              <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+                <div style="width: ${levelInfo.pct}%; height: 100%; background: ${theme}; transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+
+            <!-- Live Member Roster with Status & Ranks -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+              ${squadMembers.map(m => `
+                <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.74rem; display: flex; align-items: center; gap: 0.4rem;">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+                  <strong>@${m.profiles?.username || 'User'}</strong>
+                  <span style="color: ${theme}; font-size: 0.68rem;">[${m.custom_rank || 'Member'}]</span>
+                  <span style="color: var(--muted); font-style: italic;">• ${m.profiles?.status || 'Online'}</span>
+                </div>
+              `).join('')}
             </div>
           </div>
 
           <!-- Vault Navigation Tabs -->
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.6rem;">
-            <button class="vault-tab-btn" data-tab="feed" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'feed' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'feed' ? theme : 'rgba(255,255,255,0.1)'};">
-              💬 Vault Feed (${squadPosts.length})
+          <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.6rem;">
+            <button class="vault-tab-btn" data-tab="feed" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'feed' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'feed' ? theme : 'rgba(255,255,255,0.1)'};">
+              Vault Feed (${squadPosts.length})
             </button>
-            <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
-              📊 Polls (${squadPolls.length})
+            <button class="vault-tab-btn" data-tab="raids" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'raids' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'raids' ? theme : 'rgba(255,255,255,0.1)'};">
+              Boss Raid & Goals
             </button>
-            <button class="vault-tab-btn" data-tab="goals" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'goals' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'goals' ? theme : 'rgba(255,255,255,0.1)'};">
-              ✅ Goals (${squadGoals.filter(g => g.is_completed).length}/${squadGoals.length})
+            <button class="vault-tab-btn" data-tab="games" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'games' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'games' ? theme : 'rgba(255,255,255,0.1)'};">
+              Arena & Leaderboard
             </button>
-            <button class="vault-tab-btn" data-tab="settings" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'settings' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'settings' ? theme : 'rgba(255,255,255,0.1)'};">
-              ⚙️ Customize
+            <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
+              Polls (${squadPolls.length})
+            </button>
+            <button class="vault-tab-btn" data-tab="settings" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'settings' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'settings' ? theme : 'rgba(255,255,255,0.1)'};">
+              Customize
             </button>
           </div>
 
-          <!-- TAB 1: VAULT FEED -->
           ${activeVaultTab === 'feed' ? renderVaultFeedTab(theme) : ''}
-
-          <!-- TAB 2: POLLS -->
+          ${activeVaultTab === 'raids' ? renderVaultRaidsTab(theme) : ''}
+          ${activeVaultTab === 'games' ? renderVaultGamesTab(theme) : ''}
           ${activeVaultTab === 'polls' ? renderVaultPollsTab(theme) : ''}
-
-          <!-- TAB 3: GOALS -->
-          ${activeVaultTab === 'goals' ? renderVaultGoalsTab(theme) : ''}
-
-          <!-- TAB 4: CUSTOMIZE SQUAD -->
           ${activeVaultTab === 'settings' ? renderVaultSettingsTab(theme) : ''}
         </div>
       ` : ''}
@@ -246,7 +308,7 @@ function renderVaultFeedTab(theme) {
       <div style="background:${isPinnedCard ? 'rgba(168, 85, 247, 0.08)' : 'rgba(10,14,26,0.5)'}; padding:0.85rem; border-radius:8px; border:1px solid ${isPinnedCard ? theme : 'rgba(255,255,255,0.06)'};">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
           <span style="font-size:0.75rem; color:${theme}; font-weight:600;">
-            ${isPinnedCard ? '📌 PINNED • ' : ''}@${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            ${isPinnedCard ? 'PINNED • ' : ''}@${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
           </span>
           <div style="display:flex; gap:0.6rem; align-items:center;">
             <button class="pin-post-btn" data-post-id="${p.id}" data-pinned="${p.is_pinned}" style="background:none; border:none; color:var(--muted); font-size:0.72rem; cursor:pointer; padding:0; width:auto; margin:0;">
@@ -259,7 +321,6 @@ function renderVaultFeedTab(theme) {
         </div>
         <div style="font-size:0.92rem; word-break: break-word; margin-bottom: 0.6rem;">${formatPostContent(p.content)}</div>
         
-        <!-- Reaction Bar -->
         <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
           ${emojis.map(emoji => {
             const usersList = reactions[emoji] || [];
@@ -277,7 +338,7 @@ function renderVaultFeedTab(theme) {
 
   return `
     <form id="post-form" style="margin-bottom: 1.2rem; display: flex; gap: 0.5rem;">
-      <input type="text" id="post-content" placeholder="Share a message, drop a link, or post an update..." required style="flex: 1; margin: 0;">
+      <input type="text" id="post-content" placeholder="Share a message or drop a link (+15 XP)..." required style="flex: 1; margin: 0;">
       <button type="submit" style="width: auto; margin: 0; padding: 0 1.2rem; background: ${theme};">Post</button>
     </form>
 
@@ -293,6 +354,109 @@ function renderVaultFeedTab(theme) {
   `;
 }
 
+function renderVaultRaidsTab(theme) {
+  const hp = activeSquad.boss_hp ?? 500;
+  const maxHp = activeSquad.boss_max_hp ?? 500;
+  const hpPct = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
+
+  return `
+    <!-- Squad Boss Raid Card -->
+    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <div>
+          <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #f87171; font-weight: 700;">ACTIVE SQUAD RAID BOSS</span>
+          <h4 style="margin: 0.1rem 0 0; font-size: 1.05rem; color: #fff;">${activeSquad.boss_name || 'Shadow Warden'}</h4>
+        </div>
+        <span style="font-size: 0.85rem; font-weight: 700; color: #f87171;">${hp} / ${maxHp} HP</span>
+      </div>
+
+      <div style="width: 100%; height: 10px; background: rgba(0,0,0,0.4); border-radius: 6px; overflow: hidden; margin-bottom: 0.8rem;">
+        <div style="width: ${hpPct}%; height: 100%; background: linear-gradient(90deg, #ef4444, #f97316); transition: width 0.3s ease;"></div>
+      </div>
+
+      <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+        <button id="attack-boss-btn" style="flex: 1; margin: 0; background: #ef4444; font-size: 0.82rem; font-weight: 600;">
+          Strike Boss (-35 HP • +20 XP)
+        </button>
+        ${hp === 0 ? `
+          <button id="summon-boss-btn" class="btn-secondary" style="width: auto; margin: 0; font-size: 0.82rem; border-color: #10b981; color: #10b981;">
+            Summon Stronger Boss (+100 Squad XP)
+          </button>
+        ` : ''}
+      </div>
+    </div>
+
+    <!-- Shared Squad Checklist -->
+    <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem; color: var(--muted);">Shared Squad Objectives</h4>
+    <form id="create-goal-form" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+      <input type="text" id="goal-title" placeholder="Add a squad goal or target..." required style="flex: 1; margin: 0;">
+      <button type="submit" style="width: auto; margin: 0; padding: 0 1.1rem; background: ${theme};">Add</button>
+    </form>
+
+    <div style="display: flex; flex-direction: column; gap: 0.55rem; max-height: 240px; overflow-y: auto;">
+      ${squadGoals.length > 0 ? squadGoals.map(g => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <label style="display: flex; align-items: center; gap: 0.7rem; cursor: pointer; font-size: 0.88rem; text-decoration: ${g.is_completed ? 'line-through' : 'none'}; color: ${g.is_completed ? 'var(--muted)' : '#fff'};">
+            <input type="checkbox" class="toggle-goal-cb" data-goal-id="${g.id}" ${g.is_completed ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: ${theme};">
+            ${g.title}
+          </label>
+          <button class="delete-goal-btn" data-goal-id="${g.id}" style="width: auto; margin: 0; background: none; border: none; color: #ff4757; font-size: 0.75rem; cursor: pointer;">✕</button>
+        </div>
+      `).join('') : '<p style="font-size:0.82rem; color:var(--muted); text-align:center;">No squad objectives yet.</p>'}
+    </div>
+  `;
+}
+
+function renderVaultGamesTab(theme) {
+  const sortedLeaderboard = [...squadMembers].sort((a, b) => (b.profiles?.xp || 0) - (a.profiles?.xp || 0));
+
+  let btnBg = theme;
+  let btnText = 'Start Reflex Test';
+  if (reactionState === 'waiting') {
+    btnBg = '#ef4444';
+    btnText = 'WAIT FOR GREEN...';
+  } else if (reactionState === 'ready') {
+    btnBg = '#10b981';
+    btnText = 'CLICK NOW!';
+  } else if (reactionState === 'done') {
+    btnBg = theme;
+    btnText = `${lastReactionMs} ms — Play Again`;
+  }
+
+  return `
+    <!-- Mini-Game: Squad Reflex Challenge -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem; text-align: center;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+        <h4 style="margin: 0; font-size: 0.98rem;">Squad Reflex Challenge</h4>
+        <span style="font-size: 0.75rem; color: ${theme}; font-weight: 600;">
+          Squad Record: ${activeSquad.best_reaction_ms ? `${activeSquad.best_reaction_ms}ms (@${activeSquad.best_reaction_user})` : 'Unclaimed'}
+        </span>
+      </div>
+      <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 0.9rem;">
+        Test your reaction speed. Beat the squad record to earn +30 bonus XP!
+      </p>
+      <button id="reflex-game-btn" style="width: 100%; height: 64px; font-size: 1rem; font-weight: 700; border-radius: 8px; background: ${btnBg}; margin: 0; transition: background 0.1s;">
+        ${btnText}
+      </button>
+    </div>
+
+    <!-- Squad MVP Leaderboard -->
+    <h4 style="margin: 0 0 0.6rem; font-size: 0.95rem;">Squad MVP Leaderboard</h4>
+    <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+      ${sortedLeaderboard.map((m, idx) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid ${idx === 0 ? theme : 'rgba(255,255,255,0.05)'};">
+          <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.86rem;">
+            <strong style="color: ${idx === 0 ? theme : 'var(--muted)'};">#${idx + 1}</strong>
+            <span>@${m.profiles?.username || 'Member'}</span>
+            <span style="font-size: 0.7rem; color: var(--muted);">(${m.custom_rank || 'Member'})</span>
+          </div>
+          <strong style="font-size: 0.85rem; color: #fff;">${m.profiles?.xp || 0} XP</strong>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderVaultPollsTab(theme) {
   return `
     <form id="create-poll-form" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); padding: 1rem; border-radius: 8px; margin-bottom: 1.2rem;">
@@ -304,7 +468,7 @@ function renderVaultPollsTab(theme) {
         <input type="text" id="poll-opt-2" placeholder="Option 2" required style="flex: 1;">
         <input type="text" id="poll-opt-3" placeholder="Option 3 (optional)" style="flex: 1;">
       </div>
-      <button type="submit" style="margin: 0; background: ${theme}; font-size: 0.85rem;">Launch Squad Poll</button>
+      <button type="submit" style="margin: 0; background: ${theme}; font-size: 0.85rem;">Launch Squad Poll (+20 XP)</button>
     </form>
 
     <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 320px; overflow-y: auto;">
@@ -312,7 +476,7 @@ function renderVaultPollsTab(theme) {
         const totalVotes = poll.options.reduce((sum, opt) => sum + (opt.votes?.length || 0), 0);
         return `
           <div style="background: rgba(10,14,26,0.6); border: 1px solid rgba(255,255,255,0.08); padding: 1rem; border-radius: 8px;">
-            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.8rem;">📊 ${poll.question}</div>
+            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.8rem;">${poll.question}</div>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
               ${poll.options.map((opt, idx) => {
                 const count = opt.votes?.length || 0;
@@ -337,27 +501,6 @@ function renderVaultPollsTab(theme) {
   `;
 }
 
-function renderVaultGoalsTab(theme) {
-  return `
-    <form id="create-goal-form" style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem;">
-      <input type="text" id="goal-title" placeholder="Add a shared squad goal, game target, or to-do..." required style="flex: 1; margin: 0;">
-      <button type="submit" style="width: auto; margin: 0; padding: 0 1.1rem; background: ${theme};">Add Goal</button>
-    </form>
-
-    <div style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 320px; overflow-y: auto;">
-      ${squadGoals.length > 0 ? squadGoals.map(g => `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
-          <label style="display: flex; align-items: center; gap: 0.7rem; cursor: pointer; font-size: 0.9rem; text-decoration: ${g.is_completed ? 'line-through' : 'none'}; color: ${g.is_completed ? 'var(--muted)' : '#fff'};">
-            <input type="checkbox" class="toggle-goal-cb" data-goal-id="${g.id}" ${g.is_completed ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: ${theme};">
-            ${g.title}
-          </label>
-          <button class="delete-goal-btn" data-goal-id="${g.id}" style="width: auto; margin: 0; background: none; border: none; color: #ff4757; font-size: 0.75rem; cursor: pointer;">✕</button>
-        </div>
-      `).join('') : '<p style="font-size:0.85rem; color:var(--muted); text-align:center;">No squad goals yet. Add something to accomplish together!</p>'}
-    </div>
-  `;
-}
-
 function renderVaultSettingsTab(theme) {
   const colors = [
     { name: 'Neon Purple', hex: '#a855f7' },
@@ -368,7 +511,7 @@ function renderVaultSettingsTab(theme) {
   ];
 
   return `
-    <form id="customize-squad-form" style="display: flex; flex-direction: column; gap: 1rem;">
+    <form id="customize-squad-form" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
       <div class="input-group" style="margin: 0;">
         <label>Squad Name</label>
         <input type="text" id="edit-squad-name" value="${activeSquad.name}" required>
@@ -392,8 +535,24 @@ function renderVaultSettingsTab(theme) {
         <input type="hidden" id="selected-theme-color" value="${theme}">
       </div>
 
-      <button type="submit" style="background: ${theme}; margin-top: 0.5rem;">Save Squad Customization</button>
+      <button type="submit" style="background: ${theme}; margin-top: 0.2rem;">Save Squad Customization</button>
     </form>
+
+    <!-- Custom Member Ranks -->
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+      <h4 style="margin: 0 0 0.6rem; font-size: 0.9rem;">Assign Custom Member Titles</h4>
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        ${squadMembers.map(m => `
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 0.5rem 0.75rem; border-radius: 6px;">
+            <span style="font-size: 0.84rem;">@${m.profiles?.username || 'Member'}</span>
+            <div style="display: flex; gap: 0.4rem;">
+              <input type="text" class="rank-input" data-user-id="${m.user_id}" value="${m.custom_rank || 'Member'}" placeholder="e.g. Captain" style="width: 130px; padding: 0.3rem 0.5rem; font-size: 0.78rem;">
+              <button type="button" class="save-rank-btn btn-secondary" data-user-id="${m.user_id}" style="width: auto; margin: 0; padding: 0.3rem 0.6rem; font-size: 0.75rem;">Set</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
   `;
 }
 
@@ -436,50 +595,108 @@ function renderModModal(isAdmin) {
     (u.username || '').toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
+  const filteredSquads = allSquadsList.filter(s =>
+    (s.name || '').toLowerCase().includes(squadSearchQuery.toLowerCase()) ||
+    (s.invite_code || '').toLowerCase().includes(squadSearchQuery.toLowerCase())
+  );
+
   return `
-    <div id="modal-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;">
-      <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 650px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+    <div id="modal-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.78); backdrop-filter: blur(6px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 740px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 12px 35px rgba(0,0,0,0.6);">
         
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">🛡️ Staff Control Center</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.9rem; margin-bottom: 1rem;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">Staff Control Center</h3>
+            <span style="font-size: 0.75rem; color: var(--muted);">Platform Administration & Global Vault Oversight</span>
+          </div>
           <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; width: auto; margin: 0;">✕</button>
         </div>
 
+        <!-- System Metrics -->
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1rem; text-align: center;">
           <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
-            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.users}</div>
-            <div style="font-size: 0.7rem; color: var(--muted);">Total Users</div>
+            <div style="font-size: 1.15rem; font-weight: bold; color: var(--accent-glow);">${systemStats.users}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Registered Users</div>
           </div>
           <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
-            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.squads}</div>
-            <div style="font-size: 0.7rem; color: var(--muted);">Active Squads</div>
+            <div style="font-size: 1.15rem; font-weight: bold; color: var(--accent-glow);">${systemStats.squads}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Total Squads</div>
           </div>
           <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
-            <div style="font-size: 1.1rem; font-weight: bold; color: var(--accent-glow);">${systemStats.posts}</div>
-            <div style="font-size: 0.7rem; color: var(--muted);">Vault Posts</div>
+            <div style="font-size: 1.15rem; font-weight: bold; color: var(--accent-glow);">${systemStats.posts}</div>
+            <div style="font-size: 0.7rem; color: var(--muted);">Total Vault Posts</div>
           </div>
         </div>
 
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-          <button id="modal-tab-users" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; width: auto; margin: 0;">
-            Users & Roles
+        <!-- Navigation Tabs -->
+        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <button id="modal-tab-squads" class="${activeAdminTab === 'squads' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
+            All Squads (${allSquadsList.length})
+          </button>
+          <button id="modal-tab-users" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
+            Users & Roles (${allProfilesList.length})
+          </button>
+          <button id="modal-tab-feed" class="${activeAdminTab === 'feed' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
+            Global Feed
           </button>
           ${isAdmin ? `
-            <button id="modal-tab-logs" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; width: auto; margin: 0;">
+            <button id="modal-tab-broadcast" class="${activeAdminTab === 'broadcast' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
+              Broadcast
+            </button>
+            <button id="modal-tab-logs" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
               Audit Logs
             </button>
           ` : ''}
         </div>
 
+        <!-- TAB: ALL SQUADS (OWNER OVERSIGHT) -->
+        ${activeAdminTab === 'squads' ? `
+          <div style="margin-bottom: 0.8rem;">
+            <input type="text" id="mod-squad-search" placeholder="Search any squad name or invite code..." value="${squadSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
+          </div>
+          <div style="max-height: 270px; overflow-y: auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--muted);">
+                  <th style="padding:0.4rem;">Squad Name</th>
+                  <th style="padding:0.4rem;">Invite Code</th>
+                  <th style="padding:0.4rem;">Level / XP</th>
+                  <th style="padding:0.4rem; text-align:right;">Oversight</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredSquads.map(s => `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:0.45rem;">
+                      <strong style="color: ${s.theme_color || '#fff'};">${s.name}</strong>
+                      <div style="font-size: 0.7rem; color: var(--muted);">by @${s.profiles?.username || 'Unknown'}</div>
+                    </td>
+                    <td style="padding:0.45rem; font-family: monospace;">${s.invite_code}</td>
+                    <td style="padding:0.45rem;">LVL ${Math.floor((s.xp || 0)/250) + 1} (${s.xp || 0} XP)</td>
+                    <td style="padding:0.45rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
+                      <button class="inspect-squad-btn btn-secondary" data-squad-id="${s.id}" style="padding:0.25rem 0.55rem; font-size:0.72rem; width:auto; margin:0; border-color: #a855f7; color: #fff;">Inspect Vault</button>
+                      ${isAdmin ? `
+                        <button class="delete-squad-btn" data-squad-id="${s.id}" data-squad-name="${s.name}" style="padding:0.25rem 0.55rem; font-size:0.72rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer; width:auto; margin:0;">Disband</button>
+                      ` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+
+        <!-- TAB: USERS & ROLES -->
         ${activeAdminTab === 'users' ? `
           <div style="margin-bottom: 0.8rem;">
             <input type="text" id="mod-user-search" placeholder="Search username..." value="${userSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
           </div>
-          <div style="max-height: 250px; overflow-y: auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+          <div style="max-height: 270px; overflow-y: auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
               <thead>
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--muted);">
                   <th style="padding:0.4rem;">User</th>
+                  <th style="padding:0.4rem;">XP</th>
                   <th style="padding:0.4rem;">Role</th>
                   <th style="padding:0.4rem; text-align:right;">Actions</th>
                 </tr>
@@ -488,6 +705,7 @@ function renderModModal(isAdmin) {
                 ${filteredUsers.map(u => `
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                     <td style="padding:0.4rem;">@${u.username || 'Anonymous'}</td>
+                    <td style="padding:0.4rem;">${u.xp || 0}</td>
                     <td style="padding:0.4rem;">
                       <span style="padding:2px 6px; border-radius:4px; font-size:0.7rem; background:${u.role === 'admin' ? '#a855f7' : (u.role === 'mod' ? '#3b82f6' : 'rgba(255,255,255,0.1)')};">
                         ${u.role || 'user'}
@@ -496,13 +714,13 @@ function renderModModal(isAdmin) {
                     <td style="padding:0.4rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
                       ${isAdmin && u.id !== currentUser.id ? `
                         ${u.role === 'mod' ? `
-                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; width: auto; margin: 0;">Demote</button>
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.45rem; font-size:0.7rem; width: auto; margin: 0;">Demote</button>
                         ` : `
-                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#fff; width: auto; margin: 0;">Make Mod</button>
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.45rem; font-size:0.7rem; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#fff; width: auto; margin: 0;">Make Mod</button>
                         `}
                       ` : ''}
                       ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
-                        <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer; width: auto; margin: 0;">Remove</button>
+                        <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.45rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer; width: auto; margin: 0;">Remove</button>
                       ` : ''}
                     </td>
                   </tr>
@@ -510,8 +728,44 @@ function renderModModal(isAdmin) {
               </tbody>
             </table>
           </div>
-        ` : `
-          <div style="max-height: 280px; overflow-y: auto; font-size:0.8rem;">
+        ` : ''}
+
+        <!-- TAB: GLOBAL FEED (ALL POSTS ACROSS ALL SQUADS) -->
+        ${activeAdminTab === 'feed' ? `
+          <div style="max-height: 290px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem;">
+            ${globalRecentPosts.length > 0 ? globalRecentPosts.map(p => `
+              <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 0.65rem; border-radius: 6px; font-size: 0.82rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                  <span><strong style="color: var(--accent-glow);">@${p.profiles?.username || 'User'}</strong> in <strong>${p.squads?.name || 'Unknown Squad'}</strong></span>
+                  <button class="global-delete-post-btn" data-post-id="${p.id}" data-author="${p.profiles?.username || 'User'}" style="background:none; border:none; color:#ff4757; font-size:0.72rem; cursor:pointer; padding:0; width:auto; margin:0;">Delete</button>
+                </div>
+                <div style="color: #e2e8f0;">${p.content}</div>
+              </div>
+            `).join('') : '<p style="color:var(--muted); font-size:0.82rem; text-align:center;">No posts recorded across the platform yet.</p>'}
+          </div>
+        ` : ''}
+
+        <!-- TAB: SYSTEM BROADCAST -->
+        ${activeAdminTab === 'broadcast' ? `
+          <div>
+            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 0.8rem;">
+              Post a live system banner across the top of SquadVault for every online user.
+            </p>
+            <form id="broadcast-form" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+              <input type="text" id="broadcast-msg-input" placeholder="e.g. Weekend Double XP Event is LIVE!" value="${activeAnnouncement?.message || ''}" required style="flex: 1; margin: 0;">
+              <button type="submit" style="width: auto; margin: 0; padding: 0 1rem;">Publish</button>
+            </form>
+            ${activeAnnouncement ? `
+              <button id="clear-broadcast-btn" class="btn-secondary" style="width: 100%; font-size: 0.8rem; color: #ff4757; border-color: rgba(255,71,87,0.3);">
+                Remove Active Banner
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        <!-- TAB: AUDIT LOGS -->
+        ${activeAdminTab === 'logs' ? `
+          <div style="max-height: 290px; overflow-y: auto; font-size:0.8rem;">
             ${auditLogsList.length > 0 ? auditLogsList.map(log => `
               <div style="border-bottom:1px solid rgba(255,255,255,0.05); padding:0.5rem 0;">
                 <strong style="color:var(--accent-glow);">${log.action}</strong> by 
@@ -520,13 +774,50 @@ function renderModModal(isAdmin) {
               </div>
             `).join('') : '<p style="color:var(--muted); font-size:0.8rem; text-align:center;">No audit records logged yet.</p>'}
           </div>
-        `}
+        ` : ''}
+
       </div>
     </div>
   `;
 }
 
+async function grantXp(userXpDelta, squadXpDelta) {
+  if (!currentUser || !currentProfile) return;
+  const newUserXp = (currentProfile.xp || 0) + userXpDelta;
+  currentProfile.xp = newUserXp;
+  await supabase.from('profiles').update({ xp: newUserXp }).eq('id', currentUser.id);
+
+  if (activeSquad) {
+    const newSquadXp = (activeSquad.xp || 0) + squadXpDelta;
+    activeSquad.xp = newSquadXp;
+    userSquads = userSquads.map(s => s.id === activeSquad.id ? activeSquad : s);
+    await supabase.from('squads').update({ xp: newSquadXp }).eq('id', activeSquad.id);
+  }
+}
+
 function attachEventListeners() {
+  // Status Update
+  const saveStatusBtn = document.getElementById('save-status-btn');
+  if (saveStatusBtn) {
+    saveStatusBtn.addEventListener('click', async () => {
+      const status = document.getElementById('user-status-input').value.trim() || 'Online';
+      await supabase.from('profiles').update({ status }).eq('id', currentUser.id);
+      currentProfile.status = status;
+      if (activeSquad) await fetchSquadMembers(activeSquad.id);
+      renderApp();
+    });
+  }
+
+  // Exit Owner Inspection Mode
+  const exitInspectBtn = document.getElementById('exit-inspect-btn');
+  if (exitInspectBtn) {
+    exitInspectBtn.addEventListener('click', async () => {
+      activeSquad = userSquads[0] || null;
+      if (activeSquad) await loadActiveSquadData(activeSquad.id);
+      renderApp();
+    });
+  }
+
   // Vault Tab Switching
   document.querySelectorAll('.vault-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -541,10 +832,103 @@ function attachEventListeners() {
     copyInviteBtn.addEventListener('click', () => {
       const code = copyInviteBtn.getAttribute('data-code');
       navigator.clipboard.writeText(code);
-      copyInviteBtn.innerHTML = '✅ Copied!';
-      setTimeout(() => { copyInviteBtn.innerHTML = `📋 Code: <strong>${code}</strong>`; }, 1500);
+      copyInviteBtn.innerHTML = 'Copied!';
+      setTimeout(() => { copyInviteBtn.innerHTML = `Code: <strong>${code}</strong>`; }, 1500);
     });
   }
+
+  // Attack Boss Raid
+  const attackBossBtn = document.getElementById('attack-boss-btn');
+  if (attackBossBtn) {
+    attackBossBtn.addEventListener('click', async () => {
+      if (!activeSquad) return;
+      const currentHp = activeSquad.boss_hp ?? 500;
+      if (currentHp <= 0) return;
+
+      const newHp = Math.max(0, currentHp - 35);
+      activeSquad.boss_hp = newHp;
+      await supabase.from('squads').update({ boss_hp: newHp }).eq('id', activeSquad.id);
+      await grantXp(20, 20);
+      await fetchSquadMembers(activeSquad.id);
+      renderApp();
+    });
+  }
+
+  // Summon Stronger Boss
+  const summonBossBtn = document.getElementById('summon-boss-btn');
+  if (summonBossBtn) {
+    summonBossBtn.addEventListener('click', async () => {
+      const bosses = ['Cyber Leviathan', 'Abyssal Titan', 'Void Overlord', 'Mecha Dragon', 'Solar Colossus'];
+      const nextBoss = bosses[Math.floor(Math.random() * bosses.length)];
+      const nextMaxHp = (activeSquad.boss_max_hp || 500) + 250;
+
+      activeSquad.boss_name = nextBoss;
+      activeSquad.boss_hp = nextMaxHp;
+      activeSquad.boss_max_hp = nextMaxHp;
+
+      await supabase.from('squads').update({
+        boss_name: nextBoss,
+        boss_hp: nextMaxHp,
+        boss_max_hp: nextMaxHp
+      }).eq('id', activeSquad.id);
+
+      await grantXp(25, 100);
+      renderApp();
+    });
+  }
+
+  // Reflex Mini-Game
+  const reflexGameBtn = document.getElementById('reflex-game-btn');
+  if (reflexGameBtn) {
+    reflexGameBtn.addEventListener('click', async () => {
+      if (reactionState === 'idle' || reactionState === 'done') {
+        reactionState = 'waiting';
+        renderApp();
+        const delay = 1500 + Math.random() * 2500;
+        reactionTimeout = setTimeout(() => {
+          reactionState = 'ready';
+          reactionStartTime = performance.now();
+          renderApp();
+        }, delay);
+      } else if (reactionState === 'waiting') {
+        clearTimeout(reactionTimeout);
+        reactionState = 'idle';
+        alert('Too early! Wait for the button to turn green.');
+        renderApp();
+      } else if (reactionState === 'ready') {
+        const elapsed = Math.round(performance.now() - reactionStartTime);
+        lastReactionMs = elapsed;
+        reactionState = 'done';
+
+        const prevRecord = activeSquad.best_reaction_ms;
+        if (!prevRecord || elapsed < prevRecord) {
+          activeSquad.best_reaction_ms = elapsed;
+          activeSquad.best_reaction_user = currentProfile.username;
+          await supabase.from('squads').update({
+            best_reaction_ms: elapsed,
+            best_reaction_user: currentProfile.username
+          }).eq('id', activeSquad.id);
+          await grantXp(30, 30);
+        } else {
+          await grantXp(5, 5);
+        }
+        await fetchSquadMembers(activeSquad.id);
+        renderApp();
+      }
+    });
+  }
+
+  // Save Custom Member Rank
+  document.querySelectorAll('.save-rank-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetUserId = e.currentTarget.getAttribute('data-user-id');
+      const input = document.querySelector(`.rank-input[data-user-id="${targetUserId}"]`);
+      const newRank = input?.value.trim() || 'Member';
+      await supabase.from('squad_members').update({ custom_rank: newRank }).eq('squad_id', activeSquad.id).eq('user_id', targetUserId);
+      await fetchSquadMembers(activeSquad.id);
+      renderApp();
+    });
+  });
 
   // Post Reactions
   document.querySelectorAll('.react-btn').forEach(btn => {
@@ -601,6 +985,7 @@ function attachEventListeners() {
         question,
         options
       });
+      await grantXp(20, 20);
       await fetchSquadPolls(activeSquad.id);
       renderApp();
     });
@@ -650,6 +1035,7 @@ function attachEventListeners() {
     cb.addEventListener('change', async (e) => {
       const goalId = e.target.getAttribute('data-goal-id');
       await supabase.from('squad_goals').update({ is_completed: e.target.checked }).eq('id', goalId);
+      if (e.target.checked) await grantXp(15, 15);
       await fetchSquadGoals(activeSquad.id);
       renderApp();
     });
@@ -691,30 +1077,151 @@ function attachEventListeners() {
     });
   }
 
-  // Standard Auth & Modal Listeners
-  const toggleBtn = document.getElementById("toggle-auth-btn");
-  const authForm = document.getElementById("auth-form");
-  const githubBtn = document.getElementById("github-login-btn");
-  const profileForm = document.getElementById("profile-form");
-  const createSquadForm = document.getElementById("create-squad-form");
-  const joinSquadForm = document.getElementById("join-squad-form");
-  const postForm = document.getElementById("post-form");
-  const signoutBtn = document.getElementById("signout-btn");
-
+  // Staff Control Center Modal Listeners
   const openModModalBtn = document.getElementById("open-mod-modal-btn");
   const closeModModalBtn = document.getElementById("close-mod-modal-btn");
   const modalBackdrop = document.getElementById("modal-backdrop");
 
+  if (openModModalBtn) {
+    openModModalBtn.addEventListener("click", async () => {
+      isModModalOpen = true;
+      await fetchStaffData();
+      renderApp();
+    });
+  }
+
+  if (closeModModalBtn) {
+    closeModModalBtn.addEventListener("click", () => {
+      isModModalOpen = false;
+      renderApp();
+    });
+  }
+
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener("click", (e) => {
+      if (e.target.id === 'modal-backdrop') {
+        isModModalOpen = false;
+        renderApp();
+      }
+    });
+  }
+
+  // Staff Modal Tabs
+  ['squads', 'users', 'feed', 'broadcast', 'logs'].forEach(tab => {
+    const el = document.getElementById(`modal-tab-${tab}`);
+    if (el) {
+      el.addEventListener('click', async () => {
+        activeAdminTab = tab;
+        if (tab === 'logs') await fetchAuditLogs();
+        if (tab === 'feed') await fetchGlobalRecentPosts();
+        renderApp();
+      });
+    }
+  });
+
+  // Search Inputs inside Staff Modal
+  const squadSearchInput = document.getElementById("mod-squad-search");
+  if (squadSearchInput) {
+    squadSearchInput.addEventListener("input", (e) => {
+      squadSearchQuery = e.target.value;
+      renderApp();
+      const newInput = document.getElementById("mod-squad-search");
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+      }
+    });
+  }
+
+  const userSearchInput = document.getElementById("mod-user-search");
+  if (userSearchInput) {
+    userSearchInput.addEventListener("input", (e) => {
+      userSearchQuery = e.target.value;
+      renderApp();
+      const newInput = document.getElementById("mod-user-search");
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+      }
+    });
+  }
+
+  // Inspect Any Squad Vault (Owner Oversight)
+  document.querySelectorAll('.inspect-squad-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetSquadId = e.currentTarget.getAttribute('data-squad-id');
+      const targetSquad = allSquadsList.find(s => s.id === targetSquadId);
+      if (targetSquad) {
+        activeSquad = targetSquad;
+        activeVaultTab = 'feed';
+        isModModalOpen = false;
+        await loadActiveSquadData(targetSquad.id);
+        renderApp();
+      }
+    });
+  });
+
+  // Disband Any Squad (Admin)
+  document.querySelectorAll('.delete-squad-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetSquadId = e.currentTarget.getAttribute('data-squad-id');
+      const targetSquadName = e.currentTarget.getAttribute('data-squad-name');
+      if (confirm(`Permanently disband squad "${targetSquadName}" and delete all its posts?`)) {
+        await supabase.from('squads').delete().eq('id', targetSquadId);
+        await logStaffAction('DISBAND_SQUAD', `Disbanded squad "${targetSquadName}"`);
+        if (activeSquad?.id === targetSquadId) activeSquad = null;
+        await fetchStaffData();
+        renderApp();
+      }
+    });
+  });
+
+  // Delete Post from Global Feed
+  document.querySelectorAll('.global-delete-post-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const postId = e.currentTarget.getAttribute('data-post-id');
+      const author = e.currentTarget.getAttribute('data-author');
+      await supabase.from('posts').delete().eq('id', postId);
+      await logStaffAction('DELETE_POST', `Deleted global feed post by @${author}`);
+      await fetchGlobalRecentPosts();
+      renderApp();
+    });
+  });
+
+  // System Broadcast Form
+  const broadcastForm = document.getElementById('broadcast-form');
+  if (broadcastForm) {
+    broadcastForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = document.getElementById('broadcast-msg-input').value.trim();
+      if (!message) return;
+
+      await supabase.from('announcements').update({ is_active: false }).eq('is_active', true);
+      await supabase.from('announcements').insert({ message, created_by: currentUser.id, is_active: true });
+      await logStaffAction('BROADCAST', `Published banner: "${message}"`);
+      await fetchActiveAnnouncement();
+      isModModalOpen = false;
+      renderApp();
+    });
+  }
+
+  const clearBroadcastBtn = document.getElementById('clear-broadcast-btn');
+  if (clearBroadcastBtn) {
+    clearBroadcastBtn.addEventListener('click', async () => {
+      await supabase.from('announcements').update({ is_active: false }).eq('is_active', true);
+      activeAnnouncement = null;
+      await logStaffAction('CLEAR_BROADCAST', 'Cleared active system banner');
+      renderApp();
+    });
+  }
+
+  // User Data Modal Listeners
   const openUserDataBtn = document.getElementById("open-user-data-btn");
   const closeUserDataBtn = document.getElementById("close-user-data-btn");
   const userDataBackdrop = document.getElementById("user-data-backdrop");
   const updateUsernameForm = document.getElementById("update-username-form");
   const deleteMyPostsBtn = document.getElementById("delete-my-posts-btn");
   const deleteMyAccountBtn = document.getElementById("delete-my-account-btn");
-
-  const modalTabUsers = document.getElementById("modal-tab-users");
-  const modalTabLogs = document.getElementById("modal-tab-logs");
-  const userSearchInput = document.getElementById("mod-user-search");
 
   if (openUserDataBtn) {
     openUserDataBtn.addEventListener("click", (e) => {
@@ -777,56 +1284,15 @@ function attachEventListeners() {
     });
   }
 
-  if (openModModalBtn) {
-    openModModalBtn.addEventListener("click", async () => {
-      isModModalOpen = true;
-      await fetchStaffData();
-      renderApp();
-    });
-  }
-
-  if (closeModModalBtn) {
-    closeModModalBtn.addEventListener("click", () => {
-      isModModalOpen = false;
-      renderApp();
-    });
-  }
-
-  if (modalBackdrop) {
-    modalBackdrop.addEventListener("click", (e) => {
-      if (e.target.id === 'modal-backdrop') {
-        isModModalOpen = false;
-        renderApp();
-      }
-    });
-  }
-
-  if (modalTabUsers) {
-    modalTabUsers.addEventListener("click", () => {
-      activeAdminTab = 'users';
-      renderApp();
-    });
-  }
-
-  if (modalTabLogs) {
-    modalTabLogs.addEventListener("click", async () => {
-      activeAdminTab = 'logs';
-      await fetchAuditLogs();
-      renderApp();
-    });
-  }
-
-  if (userSearchInput) {
-    userSearchInput.addEventListener("input", (e) => {
-      userSearchQuery = e.target.value;
-      renderApp();
-      const newInput = document.getElementById("mod-user-search");
-      if (newInput) {
-        newInput.focus();
-        newInput.setSelectionRange(newInput.value.length, newInput.value.length);
-      }
-    });
-  }
+  // Standard Auth & Squad Listeners
+  const toggleBtn = document.getElementById("toggle-auth-btn");
+  const authForm = document.getElementById("auth-form");
+  const githubBtn = document.getElementById("github-login-btn");
+  const profileForm = document.getElementById("profile-form");
+  const createSquadForm = document.getElementById("create-squad-form");
+  const joinSquadForm = document.getElementById("join-squad-form");
+  const postForm = document.getElementById("post-form");
+  const signoutBtn = document.getElementById("signout-btn");
 
   if (toggleBtn) {
     toggleBtn.addEventListener("click", (e) => {
@@ -874,7 +1340,7 @@ function attachEventListeners() {
     profileForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const username = document.getElementById("username").value.trim();
-      const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, username, role: 'user' });
+      const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, username, role: 'user', xp: 0, status: 'Online' });
       if (error) {
         document.getElementById("profile-error").innerText = error.message;
       } else {
@@ -891,7 +1357,7 @@ function attachEventListeners() {
 
       const { data: squad, error } = await supabase.from('squads').insert({ name, invite_code, created_by: currentUser.id }).select().single();
       if (!error && squad) {
-        await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id });
+        await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id, custom_rank: 'Captain' });
         activeSquad = squad;
         await loadUserData();
       }
@@ -905,7 +1371,7 @@ function attachEventListeners() {
       const { data: squad } = await supabase.from('squads').select('*').eq('invite_code', code).single();
 
       if (squad) {
-        await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id });
+        await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id, custom_rank: 'Member' });
         activeSquad = squad;
         await loadUserData();
       } else {
@@ -923,7 +1389,9 @@ function attachEventListeners() {
       const { error } = await supabase.from('posts').insert({ squad_id: activeSquad.id, user_id: currentUser.id, content });
       if (!error) {
         document.getElementById("post-content").value = "";
+        await grantXp(15, 15);
         await fetchSquadPosts(activeSquad.id);
+        await fetchSquadMembers(activeSquad.id);
         renderApp();
       }
     });
@@ -1011,6 +1479,16 @@ async function logStaffAction(action, target_info) {
   });
 }
 
+async function fetchActiveAnnouncement() {
+  const { data } = await supabase
+    .from('announcements')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  activeAnnouncement = (data && data.length > 0) ? data[0] : null;
+}
+
 async function fetchAuditLogs() {
   const { data } = await supabase
     .from('audit_logs')
@@ -1020,10 +1498,22 @@ async function fetchAuditLogs() {
   auditLogsList = data || [];
 }
 
+async function fetchGlobalRecentPosts() {
+  const { data } = await supabase
+    .from('posts')
+    .select('*, profiles(username), squads(name)')
+    .order('created_at', { ascending: false })
+    .limit(40);
+  globalRecentPosts = data || [];
+}
+
 async function fetchStaffData() {
   if (currentProfile?.role === 'admin' || currentProfile?.role === 'mod') {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     allProfilesList = profiles || [];
+
+    const { data: squads } = await supabase.from('squads').select('*, profiles:created_by(username)').order('created_at', { ascending: false });
+    allSquadsList = squads || [];
     
     const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
     const { count: squadCount } = await supabase.from('squads').select('*', { count: 'exact', head: true });
@@ -1031,6 +1521,7 @@ async function fetchStaffData() {
 
     systemStats = { users: userCount || 0, squads: squadCount || 0, posts: postCount || 0 };
 
+    await fetchGlobalRecentPosts();
     if (currentProfile?.role === 'admin') {
       await fetchAuditLogs();
     }
@@ -1040,7 +1531,7 @@ async function fetchStaffData() {
 async function fetchSquadMembers(squadId) {
   const { data } = await supabase
     .from('squad_members')
-    .select('user_id, profiles(username)')
+    .select('user_id, custom_rank, profiles(username, xp, status)')
     .eq('squad_id', squadId);
   squadMembers = data || [];
 }
@@ -1095,6 +1586,8 @@ async function loadActiveSquadData(squadId) {
 async function loadUserData() {
   if (!currentUser) return;
 
+  await fetchActiveAnnouncement();
+
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
   currentProfile = profile;
 
@@ -1117,6 +1610,7 @@ async function loadUserData() {
 }
 
 async function initAuthListener() {
+  await fetchActiveAnnouncement();
   if (supabase && supabase.auth) {
     const { data } = await supabase.auth.getSession();
     currentUser = data?.session?.user || null;
