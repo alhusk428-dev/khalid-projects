@@ -12,7 +12,7 @@ let squadGoals = [];
 let topGlobalSquads = [];
 let activeAnnouncement = null;
 
-// Active Vault Tab: 'feed' | 'raids' | 'games' | 'polls' | 'settings'
+// Active Vault Tab: 'feed' | 'raids' | 'games' | 'shop' | 'polls' | 'settings'
 let activeVaultTab = 'feed';
 
 // Mini-game 1: Reflex Test State
@@ -28,10 +28,17 @@ let blitzQuestion = null;
 let blitzTimeLeft = 15;
 let blitzTimer = null;
 
+// Mini-game 3: Vault Codebreaker State
+let codeSecret = generateSecretCode();
+let codeGuesses = []; // [{ guess: '1234', exact: 1, partial: 2 }]
+let codeSolved = false;
+
 // Modals & Admin State
 let isModModalOpen = false;
 let isPrivacyModalOpen = false;
-let activeAdminTab = 'squads'; // 'squads' | 'users' | 'feed' | 'broadcast' | 'logs'
+let isLeaderboardModalOpen = false;
+let inspectedSquadProfile = null; // { squad, members, rank }
+let activeAdminTab = 'squads';
 let userSearchQuery = '';
 let squadSearchQuery = '';
 let allProfilesList = [];
@@ -39,6 +46,42 @@ let allSquadsList = [];
 let globalRecentPosts = [];
 let auditLogsList = [];
 let systemStats = { users: 0, squads: 0, posts: 0 };
+
+const PERK_CATALOG = [
+  { id: 'color_cyan', type: 'color', name: 'Cyber Cyan Name', value: '#22d3ee', cost: 100 },
+  { id: 'color_gold', type: 'color', name: 'Champion Gold Name', value: '#fbbf24', cost: 250 },
+  { id: 'color_crimson', type: 'color', name: 'Crimson Flame Name', value: '#f87171', cost: 400 },
+  { id: 'title_slayer', type: 'title', name: 'Title: Boss Slayer', value: 'Boss Slayer', cost: 150 },
+  { id: 'title_demon', type: 'title', name: 'Title: Speed Demon', value: 'Speed Demon', cost: 300 },
+  { id: 'title_legend', type: 'title', name: 'Title: Vault Legend', value: 'Vault Legend', cost: 600 }
+];
+
+function generateSecretCode() {
+  const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  let res = '';
+  for (let i = 0; i < 4; i++) {
+    const idx = Math.floor(Math.random() * digits.length);
+    res += digits.splice(idx, 1)[0];
+  }
+  return res;
+}
+
+function getDailyBounty() {
+  const bounties = [
+    { title: 'Vault Chatterbox', desc: 'Post a message or hype ping in your squad vault today.', reward: 120 },
+    { title: 'Boss Hunter', desc: 'Deal damage to your squad Raid Boss today.', reward: 150 },
+    { title: 'Arena Challenger', desc: 'Play a match in the Squad Arena (Reflex, Blitz, or Codebreaker).', reward: 130 },
+    { title: 'Squad Strategist', desc: 'Vote on a poll or complete a squad objective.', reward: 140 }
+  ];
+  const dayIndex = new Date().getDate() % bounties.length;
+  return bounties[dayIndex];
+}
+
+function hasClaimedBountyToday() {
+  if (!currentProfile?.last_bounty_date) return false;
+  const todayStr = new Date().toISOString().split('T')[0];
+  return currentProfile.last_bounty_date === todayStr;
+}
 
 function formatPostContent(content) {
   if (content.startsWith('[HYPE] ')) {
@@ -71,13 +114,21 @@ function renderApp() {
   const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
 
   appContainer.innerHTML = `
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem;">
-      <a href="#" class="logo">SquadVault</a>
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; flex-wrap: wrap; gap: 0.6rem;">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <a href="#" class="logo">SquadVault</a>
+        ${currentUser ? `
+          <button id="open-leaderboard-btn" class="btn-secondary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; width: auto; margin: 0; border-color: rgba(251, 191, 36, 0.4); color: #fbbf24; background: rgba(251, 191, 36, 0.08);">
+            Top Squads
+          </button>
+        ` : ''}
+      </div>
       
       <div id="nav-actions" style="display: flex; align-items: center; gap: 0.9rem;">
-        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="font-size: 0.88rem; white-space: nowrap;">
+        <span id="user-display" class="${currentUser ? '' : 'hidden'}" style="font-size: 0.88rem; white-space: nowrap; color: ${currentProfile?.name_color || '#fff'}; font-weight: 600;">
           ${currentProfile?.username ? `@${currentProfile.username}` : (currentUser?.email || '')}
-          ${currentProfile?.xp !== undefined ? `<span style="color: var(--muted); font-size: 0.78rem; margin-left: 0.3rem;">(${currentProfile.xp} XP)</span>` : ''}
+          ${currentProfile?.active_title ? `<span style="font-size: 0.7rem; background: rgba(255,255,255,0.1); color: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 0.3rem;">${currentProfile.active_title}</span>` : ''}
+          ${currentProfile?.xp !== undefined ? `<span style="color: var(--muted); font-size: 0.78rem; margin-left: 0.3rem; font-weight: 400;">(${currentProfile.xp} XP)</span>` : ''}
         </span>
         <button id="signout-btn" class="btn-secondary ${currentUser ? '' : 'hidden'}" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; width: auto; margin: 0; white-space: nowrap;">Sign Out</button>
       </div>
@@ -95,6 +146,8 @@ function renderApp() {
 
     ${isModModalOpen && isStaff ? renderModModal(currentProfile.role === 'admin') : ''}
     ${isPrivacyModalOpen && currentUser ? renderUserDataModal() : ''}
+    ${isLeaderboardModalOpen && currentUser ? renderGlobalLeaderboardModal() : ''}
+    ${inspectedSquadProfile ? renderSquadProfileDossierModal() : ''}
   `;
 
   attachEventListeners();
@@ -168,9 +221,11 @@ function renderDashboardSection(isStaff) {
   const levelInfo = getSquadLevelInfo(activeSquad?.xp || 0);
   const isInspectingExternalSquad = activeSquad && !userSquads.some(s => s.id === activeSquad.id);
   const checkedIn = hasCheckedInToday();
+  const bounty = getDailyBounty();
+  const bountyClaimed = hasClaimedBountyToday();
 
   return `
-    <div class="dashboard-container" style="max-width: 720px;">
+    <div class="dashboard-container" style="max-width: 740px;">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.7rem;">
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <h2 style="margin: 0; text-align: left;">Welcome, @${currentProfile.username}!</h2>
@@ -181,7 +236,7 @@ function renderDashboardSection(isStaff) {
 
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <button id="daily-checkin-btn" ${checkedIn ? 'disabled' : ''} style="width: auto; margin: 0; padding: 0.4rem 0.85rem; font-size: 0.78rem; border-radius: 8px; background: ${checkedIn ? 'rgba(255,255,255,0.05)' : '#10b981'}; color: ${checkedIn ? 'var(--muted)' : '#fff'}; border: none; cursor: ${checkedIn ? 'default' : 'pointer'}; font-weight: 600;">
-            ${checkedIn ? 'Checked In Today' : 'Daily Check-In (+50 XP)'}
+            ${checkedIn ? 'Checked In' : 'Check-In (+50 XP)'}
           </button>
 
           ${isStaff ? `
@@ -190,6 +245,17 @@ function renderDashboardSection(isStaff) {
             </button>
           ` : ''}
         </div>
+      </div>
+
+      <!-- Daily Rotating Bounty Banner -->
+      <div style="background: linear-gradient(90deg, rgba(168,85,247,0.12), rgba(59,130,246,0.12)); border: 1px solid rgba(168,85,247,0.3); padding: 0.65rem 0.9rem; border-radius: 8px; margin-bottom: 0.7rem; display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+        <div style="font-size: 0.8rem;">
+          <span style="color: #c084fc; font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.04em;">DAILY BOUNTY: ${bounty.title}</span>
+          <div style="color: #e2e8f0; margin-top: 0.1rem;">${bounty.desc}</div>
+        </div>
+        <button id="claim-bounty-btn" ${bountyClaimed ? 'disabled' : ''} style="width: auto; margin: 0; padding: 0.35rem 0.8rem; font-size: 0.75rem; border-radius: 6px; background: ${bountyClaimed ? 'rgba(255,255,255,0.06)' : '#a855f7'}; color: ${bountyClaimed ? 'var(--muted)' : '#fff'}; border: none; cursor: ${bountyClaimed ? 'default' : 'pointer'}; font-weight: 600;">
+          ${bountyClaimed ? 'Claimed' : `Claim +${bounty.reward} XP`}
+        </button>
       </div>
 
       <!-- Live Status Bar -->
@@ -261,9 +327,14 @@ function renderDashboardSection(isStaff) {
                   ${activeSquad.description || 'Welcome to our shared squad vault!'}
                 </p>
               </div>
-              <button id="copy-invite-btn" data-code="${activeSquad.invite_code}" style="width: auto; margin: 0; font-size: 0.75rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); padding: 0.35rem 0.7rem; border-radius: 6px; color: #fff; cursor: pointer;">
-                Code: <strong>${activeSquad.invite_code}</strong>
-              </button>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button class="view-squad-profile-btn btn-secondary" data-squad-id="${activeSquad.id}" style="width: auto; margin: 0; font-size: 0.75rem; padding: 0.35rem 0.7rem;">
+                  Squad Card
+                </button>
+                <button id="copy-invite-btn" data-code="${activeSquad.invite_code}" style="width: auto; margin: 0; font-size: 0.75rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); padding: 0.35rem 0.7rem; border-radius: 6px; color: #fff; cursor: pointer;">
+                  Code: <strong>${activeSquad.invite_code}</strong>
+                </button>
+              </div>
             </div>
 
             <!-- XP Progress Bar -->
@@ -282,7 +353,7 @@ function renderDashboardSection(isStaff) {
               ${squadMembers.map(m => `
                 <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.74rem; display: flex; align-items: center; gap: 0.4rem;">
                   <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
-                  <strong>@${m.profiles?.username || 'User'}</strong>
+                  <strong style="color: ${m.profiles?.name_color || '#fff'};">@${m.profiles?.username || 'User'}</strong>
                   <span style="color: ${theme}; font-size: 0.68rem;">[${m.custom_rank || 'Member'}]</span>
                   <span style="color: var(--muted); font-style: italic;">• ${m.profiles?.status || 'Online'}</span>
                 </div>
@@ -291,20 +362,23 @@ function renderDashboardSection(isStaff) {
           </div>
 
           <!-- Vault Navigation Tabs -->
-          <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.6rem;">
-            <button class="vault-tab-btn" data-tab="feed" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'feed' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'feed' ? theme : 'rgba(255,255,255,0.1)'};">
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.6rem;">
+            <button class="vault-tab-btn" data-tab="feed" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'feed' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'feed' ? theme : 'rgba(255,255,255,0.1)'};">
               Vault Feed (${squadPosts.length})
             </button>
-            <button class="vault-tab-btn" data-tab="raids" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'raids' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'raids' ? theme : 'rgba(255,255,255,0.1)'};">
-              Boss Raid & Goals
+            <button class="vault-tab-btn" data-tab="raids" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'raids' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'raids' ? theme : 'rgba(255,255,255,0.1)'};">
+              Boss & Goals
             </button>
-            <button class="vault-tab-btn" data-tab="games" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'games' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'games' ? theme : 'rgba(255,255,255,0.1)'};">
-              Arena & Rankings
+            <button class="vault-tab-btn" data-tab="games" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'games' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'games' ? theme : 'rgba(255,255,255,0.1)'};">
+              Arena & Ranks
             </button>
-            <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
+            <button class="vault-tab-btn" data-tab="shop" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'shop' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'shop' ? theme : 'rgba(255,255,255,0.1)'};">
+              XP Armory
+            </button>
+            <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
               Polls (${squadPolls.length})
             </button>
-            <button class="vault-tab-btn" data-tab="settings" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'settings' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'settings' ? theme : 'rgba(255,255,255,0.1)'};">
+            <button class="vault-tab-btn" data-tab="settings" style="width:auto; margin:0; padding: 0.4rem 0.8rem; font-size: 0.78rem; background: ${activeVaultTab === 'settings' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'settings' ? theme : 'rgba(255,255,255,0.1)'};">
               Customize
             </button>
           </div>
@@ -312,6 +386,7 @@ function renderDashboardSection(isStaff) {
           ${activeVaultTab === 'feed' ? renderVaultFeedTab(theme) : ''}
           ${activeVaultTab === 'raids' ? renderVaultRaidsTab(theme) : ''}
           ${activeVaultTab === 'games' ? renderVaultGamesTab(theme) : ''}
+          ${activeVaultTab === 'shop' ? renderVaultShopTab(theme) : ''}
           ${activeVaultTab === 'polls' ? renderVaultPollsTab(theme) : ''}
           ${activeVaultTab === 'settings' ? renderVaultSettingsTab(theme) : ''}
         </div>
@@ -339,8 +414,10 @@ function renderVaultFeedTab(theme) {
     return `
       <div style="background:${isPinnedCard ? 'rgba(168, 85, 247, 0.08)' : 'rgba(10,14,26,0.5)'}; padding:0.85rem; border-radius:8px; border:1px solid ${isPinnedCard ? theme : 'rgba(255,255,255,0.06)'};">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-          <span style="font-size:0.75rem; color:${theme}; font-weight:600;">
-            ${isPinnedCard ? 'PINNED • ' : ''}@${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          <span style="font-size:0.75rem; color:${p.profiles?.name_color || theme}; font-weight:600;">
+            ${isPinnedCard ? 'PINNED • ' : ''}@${p.profiles?.username || 'Member'}
+            ${p.profiles?.active_title ? `<span style="font-size:0.65rem; background:rgba(255,255,255,0.08); color:#cbd5e1; padding:1px 5px; border-radius:4px; margin-left:4px;">${p.profiles.active_title}</span>` : ''}
+            <span style="color:var(--muted); font-weight:400;"> • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
           </span>
           <div style="display:flex; gap:0.6rem; align-items:center;">
             <button class="pin-post-btn" data-post-id="${p.id}" data-pinned="${p.is_pinned}" style="background:none; border:none; color:var(--muted); font-size:0.72rem; cursor:pointer; padding:0; width:auto; margin:0;">
@@ -369,7 +446,6 @@ function renderVaultFeedTab(theme) {
   };
 
   return `
-    <!-- Quick Hype Callout Bar -->
     <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.8rem;">
       <span style="font-size: 0.72rem; color: var(--muted);">Quick Hype:</span>
       ${hypeCallouts.map(text => `
@@ -402,7 +478,6 @@ function renderVaultRaidsTab(theme) {
   const hpPct = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
 
   return `
-    <!-- Squad Boss Raid Card -->
     <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <div>
@@ -428,7 +503,6 @@ function renderVaultRaidsTab(theme) {
       </div>
     </div>
 
-    <!-- Shared Squad Checklist -->
     <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem; color: var(--muted);">Shared Squad Objectives</h4>
     <form id="create-goal-form" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
       <input type="text" id="goal-title" placeholder="Add a squad goal or target..." required style="flex: 1; margin: 0;">
@@ -474,13 +548,13 @@ function renderVaultGamesTab(theme) {
           Record: ${activeSquad.best_reaction_ms ? `${activeSquad.best_reaction_ms}ms (@${activeSquad.best_reaction_user})` : 'Unclaimed'}
         </span>
       </div>
-      <button id="reflex-game-btn" style="width: 100%; height: 54px; font-size: 0.95rem; font-weight: 700; border-radius: 8px; background: ${btnBg}; margin: 0;">
+      <button id="reflex-game-btn" style="width: 100%; height: 50px; font-size: 0.92rem; font-weight: 700; border-radius: 8px; background: ${btnBg}; margin: 0;">
         ${btnText}
       </button>
     </div>
 
     <!-- Game 2: 15s Speed Math Blitz -->
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem; text-align: center;">
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h4 style="margin: 0; font-size: 0.95rem;">2. 15s Speed Blitz (+10 XP / Hit)</h4>
         <span style="font-size: 0.75rem; color: var(--muted);">Score: <strong>${blitzScore}</strong> ${blitzActive ? `• ${blitzTimeLeft}s left` : ''}</span>
@@ -499,6 +573,37 @@ function renderVaultGamesTab(theme) {
       `}
     </div>
 
+    <!-- Game 3: Vault Codebreaker -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+        <h4 style="margin: 0; font-size: 0.95rem;">3. Vault Codebreaker (+75 XP)</h4>
+        <button id="reset-codebreaker-btn" class="btn-secondary" style="width: auto; margin: 0; padding: 2px 8px; font-size: 0.7rem;">New PIN</button>
+      </div>
+      <p style="font-size: 0.76rem; color: var(--muted); margin: 0 0 0.7rem;">
+        Crack the 4-digit PIN (digits 1-9, no repeats). <strong>Exact</strong> = right digit & spot. <strong>Close</strong> = right digit, wrong spot.
+      </p>
+
+      ${!codeSolved ? `
+        <form id="codebreaker-form" style="display: flex; gap: 0.5rem; margin-bottom: 0.6rem;">
+          <input type="text" id="codebreaker-input" maxlength="4" pattern="[1-9]{4}" placeholder="e.g. 4829" required style="flex: 1; margin: 0; letter-spacing: 0.25em; text-align: center; font-weight: 700;">
+          <button type="submit" style="width: auto; margin: 0; padding: 0 1rem; background: ${theme};">Crack</button>
+        </form>
+      ` : `
+        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; padding: 0.5rem; border-radius: 6px; font-size: 0.82rem; text-align: center; margin-bottom: 0.6rem;">
+          VAULT CRACKED! PIN was <strong>${codeSecret}</strong> (+75 XP awarded!)
+        </div>
+      `}
+
+      <div style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 110px; overflow-y: auto;">
+        ${codeGuesses.map((g, i) => `
+          <div style="display: flex; justify-content: space-between; font-size: 0.78rem; background: rgba(0,0,0,0.25); padding: 0.3rem 0.6rem; border-radius: 4px;">
+            <span>Attempt #${i + 1}: <strong style="letter-spacing: 0.15em;">${g.guess}</strong></span>
+            <span><strong style="color: #10b981;">${g.exact} Exact</strong> • <strong style="color: #fbbf24;">${g.partial} Close</strong></span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
     <!-- Squad MVP Leaderboard -->
     <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem;">Squad MVP Leaderboard</h4>
     <div style="display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 1.4rem;">
@@ -506,7 +611,7 @@ function renderVaultGamesTab(theme) {
         <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.55rem 0.9rem; border-radius: 8px; border: 1px solid ${idx === 0 ? theme : 'rgba(255,255,255,0.05)'};">
           <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem;">
             <strong style="color: ${idx === 0 ? theme : 'var(--muted)'};">#${idx + 1}</strong>
-            <span>@${m.profiles?.username || 'Member'}</span>
+            <span style="color: ${m.profiles?.name_color || '#fff'}; font-weight: 600;">@${m.profiles?.username || 'Member'}</span>
             <span style="font-size: 0.7rem; color: var(--muted);">(${m.custom_rank || 'Member'})</span>
           </div>
           <strong style="font-size: 0.84rem; color: #fff;">${m.profiles?.xp || 0} XP</strong>
@@ -514,19 +619,68 @@ function renderVaultGamesTab(theme) {
       `).join('')}
     </div>
 
-    <!-- Global Top Squads Ranking -->
-    <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem;">Global Top Squads</h4>
+    <!-- Global Top Squads Ranking (Clickable!) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+      <h4 style="margin: 0; font-size: 0.92rem;">Global Top Squads</h4>
+      <span style="font-size: 0.72rem; color: var(--muted);">Click any squad to inspect profile</span>
+    </div>
     <div style="display: flex; flex-direction: column; gap: 0.45rem;">
       ${topGlobalSquads.map((s, idx) => `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 0.55rem 0.9rem; border-radius: 8px; border: 1px solid ${s.id === activeSquad.id ? theme : 'rgba(255,255,255,0.05)'};">
+        <button type="button" class="view-squad-profile-btn" data-squad-id="${s.id}" style="width: 100%; margin: 0; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid ${s.id === activeSquad.id ? theme : 'rgba(255,255,255,0.06)'}; cursor: pointer; text-align: left;">
           <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem;">
             <strong style="color: ${idx === 0 ? '#fbbf24' : 'var(--muted)'};">#${idx + 1}</strong>
-            <span style="font-weight: 600; color: ${s.theme_color || '#fff'};">${s.name}</span>
+            <span style="font-weight: 700; color: ${s.theme_color || '#fff'}; text-decoration: underline;">${s.name}</span>
             <span style="font-size: 0.7rem; color: var(--muted);">LVL ${Math.floor((s.xp || 0)/250) + 1}</span>
           </div>
-          <strong style="font-size: 0.84rem; color: var(--muted);">${s.xp || 0} XP</strong>
-        </div>
+          <strong style="font-size: 0.84rem; color: #e2e8f0;">${s.xp || 0} XP →</strong>
+        </button>
       `).join('')}
+    </div>
+  `;
+}
+
+function renderVaultShopTab(theme) {
+  const userXp = currentProfile?.xp || 0;
+  const unlocked = currentProfile?.unlocked_perks || [];
+
+  return `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div>
+        <h4 style="margin: 0; font-size: 0.98rem;">XP Armory & Cosmetics</h4>
+        <p style="margin: 0.2rem 0 0; font-size: 0.78rem; color: var(--muted);">Spend your earned XP on profile titles and colored usernames.</p>
+      </div>
+      <span style="background: rgba(168,85,247,0.15); border: 1px solid ${theme}; padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.85rem; font-weight: 700; color: #fff;">
+        Balance: ${userXp} XP
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;">
+      ${PERK_CATALOG.map(perk => {
+        const isUnlocked = unlocked.includes(perk.id);
+        const isEquipped = (perk.type === 'color' && currentProfile?.name_color === perk.value) ||
+                           (perk.type === 'title' && currentProfile?.active_title === perk.value);
+
+        return `
+          <div style="background: rgba(10,14,26,0.55); border: 1px solid ${isEquipped ? theme : 'rgba(255,255,255,0.08)'}; border-radius: 8px; padding: 0.85rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.7rem;">
+            <div>
+              <span style="font-size: 0.68rem; text-transform: uppercase; color: var(--muted);">${perk.type}</span>
+              <div style="font-weight: 700; font-size: 0.9rem; color: ${perk.type === 'color' ? perk.value : '#fff'}; margin-top: 0.2rem;">
+                ${perk.name}
+              </div>
+            </div>
+
+            ${isUnlocked ? `
+              <button class="equip-perk-btn btn-secondary" data-perk-id="${perk.id}" style="width: 100%; margin: 0; font-size: 0.78rem; border-color: ${isEquipped ? theme : 'rgba(255,255,255,0.15)'}; color: #fff;">
+                ${isEquipped ? 'Equipped' : 'Equip'}
+              </button>
+            ` : `
+              <button class="buy-perk-btn" data-perk-id="${perk.id}" ${userXp < perk.cost ? 'disabled' : ''} style="width: 100%; margin: 0; font-size: 0.78rem; background: ${userXp >= perk.cost ? theme : 'rgba(255,255,255,0.06)'}; color: ${userXp >= perk.cost ? '#fff' : 'var(--muted)'}; cursor: ${userXp >= perk.cost ? 'pointer' : 'not-allowed'};">
+                Unlock (${perk.cost} XP)
+              </button>
+            `}
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 }
@@ -614,7 +768,6 @@ function renderVaultSettingsTab(theme) {
       <button type="submit" style="background: ${theme}; margin-top: 0.2rem;">Save Squad Customization</button>
     </form>
 
-    <!-- Custom Member Ranks -->
     <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; margin-bottom: 1.5rem;">
       <h4 style="margin: 0 0 0.6rem; font-size: 0.9rem;">Assign Custom Member Titles</h4>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -630,7 +783,6 @@ function renderVaultSettingsTab(theme) {
       </div>
     </div>
 
-    <!-- Danger Zone: Delete or Leave Squad -->
     <div style="border-top: 1px solid rgba(239, 68, 68, 0.25); padding-top: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;">
       <div>
         <strong style="font-size: 0.85rem; color: #f87171;">Squad Actions</strong>
@@ -647,6 +799,106 @@ function renderVaultSettingsTab(theme) {
           Leave Squad
         </button>
       `}
+    </div>
+  `;
+}
+
+// GLOBAL LEADERBOARD MODAL
+function renderGlobalLeaderboardModal() {
+  return `
+    <div id="leaderboard-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.78); backdrop-filter: blur(6px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 580px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 12px 35px rgba(0,0,0,0.6);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.9rem; margin-bottom: 1rem;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: #fbbf24;">Global Squad Rankings</h3>
+            <span style="font-size: 0.76rem; color: var(--muted);">Click any squad to inspect its owner, members, and stats</span>
+          </div>
+          <button id="close-leaderboard-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; width: auto; margin: 0;">✕</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.55rem; max-height: 360px; overflow-y: auto;">
+          ${topGlobalSquads.map((s, idx) => `
+            <button type="button" class="view-squad-profile-btn" data-squad-id="${s.id}" style="width: 100%; margin: 0; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; text-align: left;">
+              <div style="display: flex; align-items: center; gap: 0.8rem;">
+                <span style="font-size: 1rem; font-weight: 800; color: ${idx === 0 ? '#fbbf24' : (idx === 1 ? '#cbd5e1' : (idx === 2 ? '#d97706' : 'var(--muted)'))}; width: 26px;">
+                  #${idx + 1}
+                </span>
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; color: ${s.theme_color || '#fff'};">${s.name}</div>
+                  <div style="font-size: 0.72rem; color: var(--muted);">Owner: @${s.profiles?.username || 'Unknown'} • LVL ${Math.floor((s.xp || 0)/250) + 1}</div>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-weight: 700; font-size: 0.9rem; color: #fff;">${s.xp || 0} XP</div>
+                <div style="font-size: 0.7rem; color: var(--accent-glow);">View Info →</div>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// CLICKABLE SQUAD PROFILE DOSSIER MODAL
+function renderSquadProfileDossierModal() {
+  const { squad, members, rank } = inspectedSquadProfile;
+  const theme = squad.theme_color || '#a855f7';
+  const lvl = getSquadLevelInfo(squad.xp || 0);
+
+  return `
+    <div id="dossier-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.82); backdrop-filter: blur(6px); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: #0d111a; border: 2px solid ${theme}; width: 100%; max-width: 520px; border-radius: 14px; padding: 1.5rem; box-shadow: 0 15px 40px rgba(0,0,0,0.7);">
+        
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="background: ${theme}; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
+                RANK #${rank || '—'}
+              </span>
+              <span style="background: rgba(255,255,255,0.08); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px;">
+                LEVEL ${lvl.level}
+              </span>
+            </div>
+            <h2 style="margin: 0.45rem 0 0.2rem; font-size: 1.4rem; color: #fff; text-align: left;">${squad.name}</h2>
+            <p style="margin: 0; font-size: 0.82rem; color: var(--muted);">${squad.description || 'No motto set.'}</p>
+          </div>
+          <button id="close-dossier-btn" style="background: none; border: none; color: var(--muted); font-size: 1.25rem; cursor: pointer; width: auto; margin: 0;">✕</button>
+        </div>
+
+        <!-- Key Stats Grid -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1.2rem; text-align: center;">
+          <div style="background: rgba(255,255,255,0.03); padding: 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-size: 0.7rem; color: var(--muted);">Owner</div>
+            <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-top: 0.15rem;">@${squad.profiles?.username || 'Unknown'}</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-size: 0.7rem; color: var(--muted);">Total Squad XP</div>
+            <div style="font-size: 0.88rem; font-weight: 700; color: ${theme}; margin-top: 0.15rem;">${squad.xp || 0} XP</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-size: 0.7rem; color: var(--muted);">Members</div>
+            <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-top: 0.15rem;">${members.length}</div>
+          </div>
+        </div>
+
+        <!-- Roster List -->
+        <h4 style="margin: 0 0 0.6rem; font-size: 0.88rem; color: var(--muted);">Squad Roster (${members.length})</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.45rem; max-height: 220px; overflow-y: auto; margin-bottom: 1rem;">
+          ${members.map(m => `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 0.55rem 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <div>
+                <strong style="font-size: 0.85rem; color: ${m.profiles?.name_color || '#fff'};">@${m.profiles?.username || 'Member'}</strong>
+                <span style="font-size: 0.7rem; color: ${theme}; margin-left: 0.4rem;">[${m.custom_rank || 'Member'}]</span>
+                <div style="font-size: 0.7rem; color: var(--muted);">${m.profiles?.status || 'Online'}</div>
+              </div>
+              <span style="font-size: 0.8rem; font-weight: 700; color: #e2e8f0;">${m.profiles?.xp || 0} XP</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <button id="close-dossier-footer-btn" class="btn-secondary" style="width: 100%; margin: 0;">Close Squad Card</button>
+      </div>
     </div>
   `;
 }
@@ -890,7 +1142,86 @@ function generateBlitzQuestion() {
   return isAdd ? { text: `${a} + ${b}`, ans: a + b } : { text: `${a + b} - ${b}`, ans: a };
 }
 
+async function openSquadDossierById(squadId) {
+  await fetchTopGlobalSquads();
+  const rankIdx = topGlobalSquads.findIndex(s => s.id === squadId);
+  const { data: squad } = await supabase.from('squads').select('*, profiles:created_by(username)').eq('id', squadId).single();
+  const { data: members } = await supabase.from('squad_members').select('user_id, custom_rank, profiles(username, xp, status, name_color)').eq('squad_id', squadId);
+
+  if (squad) {
+    inspectedSquadProfile = {
+      squad,
+      members: members || [],
+      rank: rankIdx !== -1 ? rankIdx + 1 : null
+    };
+    renderApp();
+  }
+}
+
 function attachEventListeners() {
+  // Open Global Leaderboard Modal
+  const openLeaderboardBtn = document.getElementById('open-leaderboard-btn');
+  if (openLeaderboardBtn) {
+    openLeaderboardBtn.addEventListener('click', async () => {
+      await fetchTopGlobalSquads();
+      isLeaderboardModalOpen = true;
+      renderApp();
+    });
+  }
+
+  const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
+  const leaderboardBackdrop = document.getElementById('leaderboard-backdrop');
+  if (closeLeaderboardBtn) {
+    closeLeaderboardBtn.addEventListener('click', () => {
+      isLeaderboardModalOpen = false;
+      renderApp();
+    });
+  }
+  if (leaderboardBackdrop) {
+    leaderboardBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'leaderboard-backdrop') {
+        isLeaderboardModalOpen = false;
+        renderApp();
+      }
+    });
+  }
+
+  // Clickable Squad Profile Dossier Triggers
+  document.querySelectorAll('.view-squad-profile-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetId = e.currentTarget.getAttribute('data-squad-id');
+      await openSquadDossierById(targetId);
+    });
+  });
+
+  const closeDossierBtn = document.getElementById('close-dossier-btn');
+  const closeDossierFooterBtn = document.getElementById('close-dossier-footer-btn');
+  const dossierBackdrop = document.getElementById('dossier-backdrop');
+  if (closeDossierBtn) closeDossierBtn.addEventListener('click', () => { inspectedSquadProfile = null; renderApp(); });
+  if (closeDossierFooterBtn) closeDossierFooterBtn.addEventListener('click', () => { inspectedSquadProfile = null; renderApp(); });
+  if (dossierBackdrop) {
+    dossierBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'dossier-backdrop') {
+        inspectedSquadProfile = null;
+        renderApp();
+      }
+    });
+  }
+
+  // Claim Daily Bounty
+  const claimBountyBtn = document.getElementById('claim-bounty-btn');
+  if (claimBountyBtn && !hasClaimedBountyToday()) {
+    claimBountyBtn.addEventListener('click', async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const bounty = getDailyBounty();
+      currentProfile.last_bounty_date = todayStr;
+      await supabase.from('profiles').update({ last_bounty_date: todayStr }).eq('id', currentUser.id);
+      await grantXp(bounty.reward, bounty.reward);
+      await fetchTopGlobalSquads();
+      renderApp();
+    });
+  }
+
   // Daily Check-In Streak
   const dailyCheckinBtn = document.getElementById('daily-checkin-btn');
   if (dailyCheckinBtn && !hasCheckedInToday()) {
@@ -903,6 +1234,76 @@ function attachEventListeners() {
       await supabase.from('profiles').update({ streak: newStreak, last_checkin: todayStr }).eq('id', currentUser.id);
       await grantXp(50, 50);
       await fetchTopGlobalSquads();
+      renderApp();
+    });
+  }
+
+  // XP Shop Buy & Equip Perks
+  document.querySelectorAll('.buy-perk-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const perkId = e.currentTarget.getAttribute('data-perk-id');
+      const perk = PERK_CATALOG.find(p => p.id === perkId);
+      if (!perk || (currentProfile.xp || 0) < perk.cost) return;
+
+      const newXp = currentProfile.xp - perk.cost;
+      const newUnlocked = [...(currentProfile.unlocked_perks || []), perk.id];
+      const updates = { xp: newXp, unlocked_perks: newUnlocked };
+      if (perk.type === 'color') updates.name_color = perk.value;
+      if (perk.type === 'title') updates.active_title = perk.value;
+
+      currentProfile = { ...currentProfile, ...updates };
+      await supabase.from('profiles').update(updates).eq('id', currentUser.id);
+      if (activeSquad) await fetchSquadMembers(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  document.querySelectorAll('.equip-perk-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const perkId = e.currentTarget.getAttribute('data-perk-id');
+      const perk = PERK_CATALOG.find(p => p.id === perkId);
+      if (!perk) return;
+
+      const updates = perk.type === 'color' ? { name_color: perk.value } : { active_title: perk.value };
+      currentProfile = { ...currentProfile, ...updates };
+      await supabase.from('profiles').update(updates).eq('id', currentUser.id);
+      if (activeSquad) await fetchSquadMembers(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Mini-Game 3: Vault Codebreaker
+  const resetCodebreakerBtn = document.getElementById('reset-codebreaker-btn');
+  if (resetCodebreakerBtn) {
+    resetCodebreakerBtn.addEventListener('click', () => {
+      codeSecret = generateSecretCode();
+      codeGuesses = [];
+      codeSolved = false;
+      renderApp();
+    });
+  }
+
+  const codebreakerForm = document.getElementById('codebreaker-form');
+  if (codebreakerForm) {
+    codebreakerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const guess = document.getElementById('codebreaker-input').value.trim();
+      if (guess.length !== 4) return;
+
+      let exact = 0;
+      let partial = 0;
+      for (let i = 0; i < 4; i++) {
+        if (guess[i] === codeSecret[i]) exact++;
+        else if (codeSecret.includes(guess[i])) partial++;
+      }
+
+      codeGuesses.unshift({ guess, exact, partial });
+      if (exact === 4) {
+        codeSolved = true;
+        await grantXp(75, 75);
+        await fetchSquadMembers(activeSquad.id);
+        await fetchTopGlobalSquads();
+      }
       renderApp();
     });
   }
@@ -1667,6 +2068,8 @@ function attachEventListeners() {
       squadGoals = [];
       isModModalOpen = false;
       isPrivacyModalOpen = false;
+      isLeaderboardModalOpen = false;
+      inspectedSquadProfile = null;
       renderApp();
     });
   }
@@ -1694,9 +2097,9 @@ async function fetchActiveAnnouncement() {
 async function fetchTopGlobalSquads() {
   const { data } = await supabase
     .from('squads')
-    .select('id, name, xp, theme_color')
+    .select('id, name, xp, theme_color, profiles:created_by(username)')
     .order('xp', { ascending: false })
-    .limit(10);
+    .limit(20);
   topGlobalSquads = data || [];
 }
 
@@ -1742,7 +2145,7 @@ async function fetchStaffData() {
 async function fetchSquadMembers(squadId) {
   const { data } = await supabase
     .from('squad_members')
-    .select('user_id, custom_rank, profiles(username, xp, status)')
+    .select('user_id, custom_rank, profiles(username, xp, status, name_color, active_title)')
     .eq('squad_id', squadId);
   squadMembers = data || [];
 }
@@ -1751,7 +2154,7 @@ async function fetchSquadPosts(squadId) {
   if (!squadId) return;
   const { data, error } = await supabase
     .from('posts')
-    .select('*, profiles(username)')
+    .select('*, profiles(username, name_color, active_title)')
     .eq('squad_id', squadId)
     .order('created_at', { ascending: false });
 
