@@ -8,8 +8,9 @@ let activeSquad = null;
 let squadPosts = [];
 let squadMembers = [];
 
-// Admin/Mod State
+// Modals & UI State
 let isModModalOpen = false;
+let isPrivacyModalOpen = false;
 let activeAdminTab = 'users'; // 'users' | 'logs'
 let userSearchQuery = '';
 let allProfilesList = [];
@@ -51,6 +52,7 @@ function renderApp() {
     </main>
 
     ${isModModalOpen && isStaff ? renderModModal(currentProfile.role === 'admin') : ''}
+    ${isPrivacyModalOpen && currentUser ? renderUserDataModal() : ''}
   `;
 
   attachEventListeners();
@@ -92,9 +94,12 @@ function renderAuthSection() {
         <a href="#" id="toggle-auth-btn">${isSignUpMode ? 'Sign In' : 'Sign Up'}</a>
       </div>
 
-      <div style="margin-top: 1.2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;">
+      <div style="margin-top: 1.2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: flex; justify-content: center; gap: 1.2rem;">
         <a href="../" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">
           ← Back to Hub
+        </a>
+        <a href="privacy.html" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">
+          Privacy Policy
         </a>
       </div>
     </div>
@@ -208,6 +213,50 @@ function renderDashboardSection() {
           </div>
         </div>
       ` : ''}
+
+      <!-- Footer Links -->
+      <div style="margin-top: 2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: flex; justify-content: center; gap: 1.2rem;">
+        <a href="privacy.html" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">
+          Privacy Policy
+        </a>
+        <a href="#" id="open-user-data-btn" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">
+          Manage My Data
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function renderUserDataModal() {
+  return `
+    <div id="user-data-backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+      <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 450px; border-radius: 12px; padding: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.8rem; margin-bottom: 1rem;">
+          <h3 style="margin: 0; font-size: 1.05rem;">Privacy & Data Controls</h3>
+          <button id="close-user-data-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;">✕</button>
+        </div>
+
+        <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem;">
+          Email on file: <strong>${currentUser?.email || 'GitHub OAuth'}</strong>
+        </p>
+
+        <form id="update-username-form" style="margin-bottom: 1.2rem;">
+          <label style="font-size: 0.8rem; color: var(--muted);">Change Username</label>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.3rem;">
+            <input type="text" id="new-username-input" value="${currentProfile?.username || ''}" required style="flex: 1; padding: 0.45rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <button type="submit" style="width: auto; margin: 0; padding: 0.45rem 0.9rem;">Update</button>
+          </div>
+        </form>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
+          <button id="delete-my-posts-btn" class="btn-secondary" style="width: 100%; font-size: 0.82rem; color: #ffa502; border-color: rgba(255,165,2,0.3);">
+            Delete All My Vault Posts
+          </button>
+          <button id="delete-my-account-btn" style="width: 100%; font-size: 0.82rem; background: #ff4757; color: #fff; border: none; padding: 0.6rem; border-radius: 6px; cursor: pointer;">
+            Wipe My Profile & Sign Out
+          </button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -323,10 +372,80 @@ function attachEventListeners() {
   const closeModModalBtn = document.getElementById("close-mod-modal-btn");
   const modalBackdrop = document.getElementById("modal-backdrop");
 
+  const openUserDataBtn = document.getElementById("open-user-data-btn");
+  const closeUserDataBtn = document.getElementById("close-user-data-btn");
+  const userDataBackdrop = document.getElementById("user-data-backdrop");
+  const updateUsernameForm = document.getElementById("update-username-form");
+  const deleteMyPostsBtn = document.getElementById("delete-my-posts-btn");
+  const deleteMyAccountBtn = document.getElementById("delete-my-account-btn");
+
   const modalTabUsers = document.getElementById("modal-tab-users");
   const modalTabLogs = document.getElementById("modal-tab-logs");
   const userSearchInput = document.getElementById("mod-user-search");
 
+  // User Data Modal Listeners
+  if (openUserDataBtn) {
+    openUserDataBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      isPrivacyModalOpen = true;
+      renderApp();
+    });
+  }
+
+  if (closeUserDataBtn) {
+    closeUserDataBtn.addEventListener("click", () => {
+      isPrivacyModalOpen = false;
+      renderApp();
+    });
+  }
+
+  if (userDataBackdrop) {
+    userDataBackdrop.addEventListener("click", (e) => {
+      if (e.target.id === 'user-data-backdrop') {
+        isPrivacyModalOpen = false;
+        renderApp();
+      }
+    });
+  }
+
+  if (updateUsernameForm) {
+    updateUsernameForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const newName = document.getElementById("new-username-input").value.trim();
+      if (!newName) return;
+      await supabase.from('profiles').update({ username: newName }).eq('id', currentUser.id);
+      isPrivacyModalOpen = false;
+      await loadUserData();
+    });
+  }
+
+  if (deleteMyPostsBtn) {
+    deleteMyPostsBtn.addEventListener("click", async () => {
+      if (confirm("Delete all posts you have ever made across all squads?")) {
+        await supabase.from('posts').delete().eq('user_id', currentUser.id);
+        isPrivacyModalOpen = false;
+        if (activeSquad) await fetchSquadPosts(activeSquad.id);
+        renderApp();
+      }
+    });
+  }
+
+  if (deleteMyAccountBtn) {
+    deleteMyAccountBtn.addEventListener("click", async () => {
+      if (confirm("Are you sure? This will wipe your profile, squad memberships, and posts.")) {
+        await supabase.from('posts').delete().eq('user_id', currentUser.id);
+        await supabase.from('squad_members').delete().eq('user_id', currentUser.id);
+        await supabase.from('profiles').delete().eq('id', currentUser.id);
+        await supabase.auth.signOut();
+        currentUser = null;
+        currentProfile = null;
+        isPrivacyModalOpen = false;
+        renderApp();
+      }
+    });
+  }
+
+  // Staff Modal Listeners
   if (openModModalBtn) {
     openModModalBtn.addEventListener("click", async () => {
       isModModalOpen = true;
@@ -544,6 +663,7 @@ function attachEventListeners() {
       squadPosts = [];
       squadMembers = [];
       isModModalOpen = false;
+      isPrivacyModalOpen = false;
       renderApp();
     });
   }
@@ -593,12 +713,24 @@ async function fetchSquadMembers(squadId) {
 }
 
 async function fetchSquadPosts(squadId) {
-  const { data } = await supabase
+  if (!squadId) return;
+
+  const { data, error } = await supabase
     .from('posts')
     .select('*, profiles(username)')
     .eq('squad_id', squadId)
     .order('created_at', { ascending: false });
-  squadPosts = data || [];
+
+  if (error) {
+    const { data: rawPosts } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('squad_id', squadId)
+      .order('created_at', { ascending: false });
+    squadPosts = rawPosts || [];
+  } else {
+    squadPosts = data || [];
+  }
 }
 
 async function loadUserData() {
