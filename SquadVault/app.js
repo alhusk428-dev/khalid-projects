@@ -9,16 +9,24 @@ let squadPosts = [];
 let squadMembers = [];
 let squadPolls = [];
 let squadGoals = [];
+let topGlobalSquads = [];
 let activeAnnouncement = null;
 
 // Active Vault Tab: 'feed' | 'raids' | 'games' | 'polls' | 'settings'
 let activeVaultTab = 'feed';
 
-// Mini-game local state
+// Mini-game 1: Reflex Test State
 let reactionState = 'idle'; // 'idle' | 'waiting' | 'ready' | 'done'
 let reactionStartTime = 0;
 let reactionTimeout = null;
 let lastReactionMs = null;
+
+// Mini-game 2: Quick Blitz State
+let blitzActive = false;
+let blitzScore = 0;
+let blitzQuestion = null;
+let blitzTimeLeft = 15;
+let blitzTimer = null;
 
 // Modals & Admin State
 let isModModalOpen = false;
@@ -33,6 +41,10 @@ let auditLogsList = [];
 let systemStats = { users: 0, squads: 0, posts: 0 };
 
 function formatPostContent(content) {
+  if (content.startsWith('[HYPE] ')) {
+    const badgeText = content.replace('[HYPE] ', '');
+    return `<span style="display:inline-block; background: linear-gradient(90deg, ${activeSquad?.theme_color || '#a855f7'}, #ec4899); color:#fff; font-weight:700; font-size:0.78rem; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.03em;">${badgeText}</span>`;
+  }
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return content.replace(urlRegex, (url) => {
     return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: ${activeSquad?.theme_color || '#a855f7'}; text-decoration: underline;">${url}</a>`;
@@ -44,6 +56,12 @@ function getSquadLevelInfo(xp = 0) {
   const currentLevelXp = xp % 250;
   const pct = Math.min(100, Math.round((currentLevelXp / 250) * 100));
   return { level, currentLevelXp, nextLevelXp: 250, pct };
+}
+
+function hasCheckedInToday() {
+  if (!currentProfile?.last_checkin) return false;
+  const todayStr = new Date().toISOString().split('T')[0];
+  return currentProfile.last_checkin === todayStr;
 }
 
 function renderApp() {
@@ -149,16 +167,29 @@ function renderDashboardSection(isStaff) {
   const theme = activeSquad?.theme_color || '#a855f7';
   const levelInfo = getSquadLevelInfo(activeSquad?.xp || 0);
   const isInspectingExternalSquad = activeSquad && !userSquads.some(s => s.id === activeSquad.id);
+  const checkedIn = hasCheckedInToday();
 
   return `
     <div class="dashboard-container" style="max-width: 720px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.5rem;">
-        <h2 style="margin: 0; text-align: left;">Welcome, @${currentProfile.username}!</h2>
-        ${isStaff ? `
-          <button id="open-mod-modal-btn" style="width: auto; margin: 0; padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: 8px; background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(168, 85, 247, 0.5); color: #fff; cursor: pointer; font-weight: 600;">
-            Staff Control Center
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.7rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <h2 style="margin: 0; text-align: left;">Welcome, @${currentProfile.username}!</h2>
+          <span style="font-size: 0.75rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+            ${currentProfile.streak || 0}d Streak
+          </span>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button id="daily-checkin-btn" ${checkedIn ? 'disabled' : ''} style="width: auto; margin: 0; padding: 0.4rem 0.85rem; font-size: 0.78rem; border-radius: 8px; background: ${checkedIn ? 'rgba(255,255,255,0.05)' : '#10b981'}; color: ${checkedIn ? 'var(--muted)' : '#fff'}; border: none; cursor: ${checkedIn ? 'default' : 'pointer'}; font-weight: 600;">
+            ${checkedIn ? 'Checked In Today' : 'Daily Check-In (+50 XP)'}
           </button>
-        ` : ''}
+
+          ${isStaff ? `
+            <button id="open-mod-modal-btn" style="width: auto; margin: 0; padding: 0.4rem 0.9rem; font-size: 0.78rem; border-radius: 8px; background: rgba(168, 85, 247, 0.16); border: 1px solid rgba(168, 85, 247, 0.5); color: #fff; cursor: pointer; font-weight: 600;">
+              Staff Control Center
+            </button>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Live Status Bar -->
@@ -268,7 +299,7 @@ function renderDashboardSection(isStaff) {
               Boss Raid & Goals
             </button>
             <button class="vault-tab-btn" data-tab="games" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'games' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'games' ? theme : 'rgba(255,255,255,0.1)'};">
-              Arena & Leaderboard
+              Arena & Rankings
             </button>
             <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.85rem; font-size: 0.8rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
               Polls (${squadPolls.length})
@@ -299,6 +330,7 @@ function renderVaultFeedTab(theme) {
   const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
   const pinnedPosts = squadPosts.filter(p => p.is_pinned);
   const regularPosts = squadPosts.filter(p => !p.is_pinned);
+  const hypeCallouts = ['SQUAD UP!', 'GGs ONLY', 'CLUTCH PLAY', 'HOP ON NOW', 'LETS GOOO'];
 
   const renderPostCard = (p, isPinnedCard = false) => {
     const reactions = p.reactions || {};
@@ -337,6 +369,16 @@ function renderVaultFeedTab(theme) {
   };
 
   return `
+    <!-- Quick Hype Callout Bar -->
+    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.8rem;">
+      <span style="font-size: 0.72rem; color: var(--muted);">Quick Hype:</span>
+      ${hypeCallouts.map(text => `
+        <button type="button" class="hype-ping-btn" data-hype="${text}" style="width: auto; margin: 0; padding: 2px 8px; font-size: 0.7rem; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; cursor: pointer;">
+          ${text}
+        </button>
+      `).join('')}
+    </div>
+
     <form id="post-form" style="margin-bottom: 1.2rem; display: flex; gap: 0.5rem;">
       <input type="text" id="post-content" placeholder="Share a message or drop a link (+15 XP)..." required style="flex: 1; margin: 0;">
       <button type="submit" style="width: auto; margin: 0; padding: 0 1.2rem; background: ${theme};">Post</button>
@@ -424,33 +466,65 @@ function renderVaultGamesTab(theme) {
   }
 
   return `
-    <!-- Mini-Game: Squad Reflex Challenge -->
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem; text-align: center;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-        <h4 style="margin: 0; font-size: 0.98rem;">Squad Reflex Challenge</h4>
-        <span style="font-size: 0.75rem; color: ${theme}; font-weight: 600;">
-          Squad Record: ${activeSquad.best_reaction_ms ? `${activeSquad.best_reaction_ms}ms (@${activeSquad.best_reaction_user})` : 'Unclaimed'}
+    <!-- Game 1: Squad Reflex Challenge -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+        <h4 style="margin: 0; font-size: 0.95rem;">1. Squad Reflex Challenge</h4>
+        <span style="font-size: 0.74rem; color: ${theme}; font-weight: 600;">
+          Record: ${activeSquad.best_reaction_ms ? `${activeSquad.best_reaction_ms}ms (@${activeSquad.best_reaction_user})` : 'Unclaimed'}
         </span>
       </div>
-      <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 0.9rem;">
-        Test your reaction speed. Beat the squad record to earn +30 bonus XP!
-      </p>
-      <button id="reflex-game-btn" style="width: 100%; height: 64px; font-size: 1rem; font-weight: 700; border-radius: 8px; background: ${btnBg}; margin: 0; transition: background 0.1s;">
+      <button id="reflex-game-btn" style="width: 100%; height: 54px; font-size: 0.95rem; font-weight: 700; border-radius: 8px; background: ${btnBg}; margin: 0;">
         ${btnText}
       </button>
     </div>
 
+    <!-- Game 2: 15s Speed Math Blitz -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.4rem; text-align: center;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h4 style="margin: 0; font-size: 0.95rem;">2. 15s Speed Blitz (+10 XP / Hit)</h4>
+        <span style="font-size: 0.75rem; color: var(--muted);">Score: <strong>${blitzScore}</strong> ${blitzActive ? `• ${blitzTimeLeft}s left` : ''}</span>
+      </div>
+
+      ${!blitzActive ? `
+        <button id="start-blitz-btn" class="btn-secondary" style="width: 100%; margin: 0; border-color: ${theme}; color: #fff;">
+          Start 15-Second Blitz
+        </button>
+      ` : `
+        <form id="blitz-answer-form" style="display: flex; gap: 0.6rem; align-items: center; justify-content: center;">
+          <span style="font-size: 1.2rem; font-weight: 700; color: ${theme};">${blitzQuestion?.text} =</span>
+          <input type="number" id="blitz-input" autofocus required style="width: 100px; margin: 0; text-align: center; font-size: 1.1rem;">
+          <button type="submit" style="width: auto; margin: 0; padding: 0.5rem 1rem; background: ${theme};">Go</button>
+        </form>
+      `}
+    </div>
+
     <!-- Squad MVP Leaderboard -->
-    <h4 style="margin: 0 0 0.6rem; font-size: 0.95rem;">Squad MVP Leaderboard</h4>
-    <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+    <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem;">Squad MVP Leaderboard</h4>
+    <div style="display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 1.4rem;">
       ${sortedLeaderboard.map((m, idx) => `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid ${idx === 0 ? theme : 'rgba(255,255,255,0.05)'};">
-          <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.86rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.55rem 0.9rem; border-radius: 8px; border: 1px solid ${idx === 0 ? theme : 'rgba(255,255,255,0.05)'};">
+          <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem;">
             <strong style="color: ${idx === 0 ? theme : 'var(--muted)'};">#${idx + 1}</strong>
             <span>@${m.profiles?.username || 'Member'}</span>
             <span style="font-size: 0.7rem; color: var(--muted);">(${m.custom_rank || 'Member'})</span>
           </div>
-          <strong style="font-size: 0.85rem; color: #fff;">${m.profiles?.xp || 0} XP</strong>
+          <strong style="font-size: 0.84rem; color: #fff;">${m.profiles?.xp || 0} XP</strong>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Global Top Squads Ranking -->
+    <h4 style="margin: 0 0 0.6rem; font-size: 0.92rem;">Global Top Squads</h4>
+    <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+      ${topGlobalSquads.map((s, idx) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 0.55rem 0.9rem; border-radius: 8px; border: 1px solid ${s.id === activeSquad.id ? theme : 'rgba(255,255,255,0.05)'};">
+          <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem;">
+            <strong style="color: ${idx === 0 ? '#fbbf24' : 'var(--muted)'};">#${idx + 1}</strong>
+            <span style="font-weight: 600; color: ${s.theme_color || '#fff'};">${s.name}</span>
+            <span style="font-size: 0.7rem; color: var(--muted);">LVL ${Math.floor((s.xp || 0)/250) + 1}</span>
+          </div>
+          <strong style="font-size: 0.84rem; color: var(--muted);">${s.xp || 0} XP</strong>
         </div>
       `).join('')}
     </div>
@@ -510,6 +584,8 @@ function renderVaultSettingsTab(theme) {
     { name: 'Solar Gold', hex: '#f59e0b' }
   ];
 
+  const isCreatorOrAdmin = activeSquad.created_by === currentUser?.id || currentProfile?.role === 'admin';
+
   return `
     <form id="customize-squad-form" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
       <div class="input-group" style="margin: 0;">
@@ -539,7 +615,7 @@ function renderVaultSettingsTab(theme) {
     </form>
 
     <!-- Custom Member Ranks -->
-    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem; margin-bottom: 1.5rem;">
       <h4 style="margin: 0 0 0.6rem; font-size: 0.9rem;">Assign Custom Member Titles</h4>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
         ${squadMembers.map(m => `
@@ -552,6 +628,25 @@ function renderVaultSettingsTab(theme) {
           </div>
         `).join('')}
       </div>
+    </div>
+
+    <!-- Danger Zone: Delete or Leave Squad -->
+    <div style="border-top: 1px solid rgba(239, 68, 68, 0.25); padding-top: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;">
+      <div>
+        <strong style="font-size: 0.85rem; color: #f87171;">Squad Actions</strong>
+        <p style="margin: 0.2rem 0 0; font-size: 0.75rem; color: var(--muted);">
+          ${isCreatorOrAdmin ? 'Permanently delete this squad and all its vault data.' : 'Leave this squad and remove it from your dashboard.'}
+        </p>
+      </div>
+      ${isCreatorOrAdmin ? `
+        <button type="button" id="delete-current-squad-btn" style="width: auto; margin: 0; padding: 0.45rem 0.95rem; font-size: 0.8rem; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+          Delete Squad
+        </button>
+      ` : `
+        <button type="button" id="leave-current-squad-btn" class="btn-secondary" style="width: auto; margin: 0; padding: 0.45rem 0.95rem; font-size: 0.8rem; border-color: #ef4444; color: #f87171;">
+          Leave Squad
+        </button>
+      `}
     </div>
   `;
 }
@@ -612,7 +707,6 @@ function renderModModal(isAdmin) {
           <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; width: auto; margin: 0;">✕</button>
         </div>
 
-        <!-- System Metrics -->
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1rem; text-align: center;">
           <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px;">
             <div style="font-size: 1.15rem; font-weight: bold; color: var(--accent-glow);">${systemStats.users}</div>
@@ -628,7 +722,6 @@ function renderModModal(isAdmin) {
           </div>
         </div>
 
-        <!-- Navigation Tabs -->
         <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1rem;">
           <button id="modal-tab-squads" class="${activeAdminTab === 'squads' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; width: auto; margin: 0;">
             All Squads (${allSquadsList.length})
@@ -649,7 +742,6 @@ function renderModModal(isAdmin) {
           ` : ''}
         </div>
 
-        <!-- TAB: ALL SQUADS (OWNER OVERSIGHT) -->
         ${activeAdminTab === 'squads' ? `
           <div style="margin-bottom: 0.8rem;">
             <input type="text" id="mod-squad-search" placeholder="Search any squad name or invite code..." value="${squadSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
@@ -686,7 +778,6 @@ function renderModModal(isAdmin) {
           </div>
         ` : ''}
 
-        <!-- TAB: USERS & ROLES -->
         ${activeAdminTab === 'users' ? `
           <div style="margin-bottom: 0.8rem;">
             <input type="text" id="mod-user-search" placeholder="Search username..." value="${userSearchQuery}" style="width: 100%; padding: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
@@ -730,7 +821,6 @@ function renderModModal(isAdmin) {
           </div>
         ` : ''}
 
-        <!-- TAB: GLOBAL FEED (ALL POSTS ACROSS ALL SQUADS) -->
         ${activeAdminTab === 'feed' ? `
           <div style="max-height: 290px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem;">
             ${globalRecentPosts.length > 0 ? globalRecentPosts.map(p => `
@@ -745,7 +835,6 @@ function renderModModal(isAdmin) {
           </div>
         ` : ''}
 
-        <!-- TAB: SYSTEM BROADCAST -->
         ${activeAdminTab === 'broadcast' ? `
           <div>
             <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 0.8rem;">
@@ -763,7 +852,6 @@ function renderModModal(isAdmin) {
           </div>
         ` : ''}
 
-        <!-- TAB: AUDIT LOGS -->
         ${activeAdminTab === 'logs' ? `
           <div style="max-height: 290px; overflow-y: auto; font-size:0.8rem;">
             ${auditLogsList.length > 0 ? auditLogsList.map(log => `
@@ -795,7 +883,81 @@ async function grantXp(userXpDelta, squadXpDelta) {
   }
 }
 
+function generateBlitzQuestion() {
+  const a = Math.floor(Math.random() * 15) + 3;
+  const b = Math.floor(Math.random() * 15) + 2;
+  const isAdd = Math.random() > 0.35;
+  return isAdd ? { text: `${a} + ${b}`, ans: a + b } : { text: `${a + b} - ${b}`, ans: a };
+}
+
 function attachEventListeners() {
+  // Daily Check-In Streak
+  const dailyCheckinBtn = document.getElementById('daily-checkin-btn');
+  if (dailyCheckinBtn && !hasCheckedInToday()) {
+    dailyCheckinBtn.addEventListener('click', async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const newStreak = (currentProfile.streak || 0) + 1;
+      currentProfile.streak = newStreak;
+      currentProfile.last_checkin = todayStr;
+
+      await supabase.from('profiles').update({ streak: newStreak, last_checkin: todayStr }).eq('id', currentUser.id);
+      await grantXp(50, 50);
+      await fetchTopGlobalSquads();
+      renderApp();
+    });
+  }
+
+  // Quick Hype Callouts
+  document.querySelectorAll('.hype-ping-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      if (!activeSquad) return;
+      const hypeText = e.currentTarget.getAttribute('data-hype');
+      await supabase.from('posts').insert({
+        squad_id: activeSquad.id,
+        user_id: currentUser.id,
+        content: `[HYPE] ${hypeText}`
+      });
+      await grantXp(5, 5);
+      await fetchSquadPosts(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Delete Current Squad (Creator or Admin)
+  const deleteCurrentSquadBtn = document.getElementById('delete-current-squad-btn');
+  if (deleteCurrentSquadBtn) {
+    deleteCurrentSquadBtn.addEventListener('click', async () => {
+      if (!activeSquad) return;
+      if (confirm(`Are you sure you want to permanently delete "${activeSquad.name}"? All posts, polls, and goals inside it will be erased.`)) {
+        const deletedId = activeSquad.id;
+        await supabase.from('squads').delete().eq('id', deletedId);
+        userSquads = userSquads.filter(s => s.id !== deletedId);
+        activeSquad = userSquads[0] || null;
+        activeVaultTab = 'feed';
+        if (activeSquad) await loadActiveSquadData(activeSquad.id);
+        await fetchTopGlobalSquads();
+        renderApp();
+      }
+    });
+  }
+
+  // Leave Current Squad (Member)
+  const leaveCurrentSquadBtn = document.getElementById('leave-current-squad-btn');
+  if (leaveCurrentSquadBtn) {
+    leaveCurrentSquadBtn.addEventListener('click', async () => {
+      if (!activeSquad) return;
+      if (confirm(`Leave "${activeSquad.name}"?`)) {
+        const leftId = activeSquad.id;
+        await supabase.from('squad_members').delete().eq('squad_id', leftId).eq('user_id', currentUser.id);
+        userSquads = userSquads.filter(s => s.id !== leftId);
+        activeSquad = userSquads[0] || null;
+        activeVaultTab = 'feed';
+        if (activeSquad) await loadActiveSquadData(activeSquad.id);
+        renderApp();
+      }
+    });
+  }
+
   // Status Update
   const saveStatusBtn = document.getElementById('save-status-btn');
   if (saveStatusBtn) {
@@ -820,8 +982,9 @@ function attachEventListeners() {
 
   // Vault Tab Switching
   document.querySelectorAll('.vault-tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       activeVaultTab = e.currentTarget.getAttribute('data-tab');
+      if (activeVaultTab === 'games') await fetchTopGlobalSquads();
       renderApp();
     });
   });
@@ -915,6 +1078,50 @@ function attachEventListeners() {
         await fetchSquadMembers(activeSquad.id);
         renderApp();
       }
+    });
+  }
+
+  // 15s Speed Math Blitz
+  const startBlitzBtn = document.getElementById('start-blitz-btn');
+  if (startBlitzBtn) {
+    startBlitzBtn.addEventListener('click', () => {
+      blitzActive = true;
+      blitzScore = 0;
+      blitzTimeLeft = 15;
+      blitzQuestion = generateBlitzQuestion();
+      renderApp();
+
+      clearInterval(blitzTimer);
+      blitzTimer = setInterval(async () => {
+        blitzTimeLeft -= 1;
+        if (blitzTimeLeft <= 0) {
+          clearInterval(blitzTimer);
+          blitzActive = false;
+          if (blitzScore > 0) {
+            await grantXp(blitzScore * 10, blitzScore * 10);
+            await fetchSquadMembers(activeSquad.id);
+            await fetchTopGlobalSquads();
+          }
+        }
+        renderApp();
+        const inp = document.getElementById('blitz-input');
+        if (inp) inp.focus();
+      }, 1000);
+    });
+  }
+
+  const blitzAnswerForm = document.getElementById('blitz-answer-form');
+  if (blitzAnswerForm) {
+    blitzAnswerForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = parseInt(document.getElementById('blitz-input').value, 10);
+      if (val === blitzQuestion?.ans) {
+        blitzScore += 1;
+        blitzQuestion = generateBlitzQuestion();
+      }
+      renderApp();
+      const inp = document.getElementById('blitz-input');
+      if (inp) inp.focus();
     });
   }
 
@@ -1106,7 +1313,6 @@ function attachEventListeners() {
     });
   }
 
-  // Staff Modal Tabs
   ['squads', 'users', 'feed', 'broadcast', 'logs'].forEach(tab => {
     const el = document.getElementById(`modal-tab-${tab}`);
     if (el) {
@@ -1119,7 +1325,6 @@ function attachEventListeners() {
     }
   });
 
-  // Search Inputs inside Staff Modal
   const squadSearchInput = document.getElementById("mod-squad-search");
   if (squadSearchInput) {
     squadSearchInput.addEventListener("input", (e) => {
@@ -1146,7 +1351,6 @@ function attachEventListeners() {
     });
   }
 
-  // Inspect Any Squad Vault (Owner Oversight)
   document.querySelectorAll('.inspect-squad-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const targetSquadId = e.currentTarget.getAttribute('data-squad-id');
@@ -1161,7 +1365,6 @@ function attachEventListeners() {
     });
   });
 
-  // Disband Any Squad (Admin)
   document.querySelectorAll('.delete-squad-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const targetSquadId = e.currentTarget.getAttribute('data-squad-id');
@@ -1169,14 +1372,14 @@ function attachEventListeners() {
       if (confirm(`Permanently disband squad "${targetSquadName}" and delete all its posts?`)) {
         await supabase.from('squads').delete().eq('id', targetSquadId);
         await logStaffAction('DISBAND_SQUAD', `Disbanded squad "${targetSquadName}"`);
-        if (activeSquad?.id === targetSquadId) activeSquad = null;
+        userSquads = userSquads.filter(s => s.id !== targetSquadId);
+        if (activeSquad?.id === targetSquadId) activeSquad = userSquads[0] || null;
         await fetchStaffData();
         renderApp();
       }
     });
   });
 
-  // Delete Post from Global Feed
   document.querySelectorAll('.global-delete-post-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const postId = e.currentTarget.getAttribute('data-post-id');
@@ -1188,7 +1391,6 @@ function attachEventListeners() {
     });
   });
 
-  // System Broadcast Form
   const broadcastForm = document.getElementById('broadcast-form');
   if (broadcastForm) {
     broadcastForm.addEventListener('submit', async (e) => {
@@ -1489,6 +1691,15 @@ async function fetchActiveAnnouncement() {
   activeAnnouncement = (data && data.length > 0) ? data[0] : null;
 }
 
+async function fetchTopGlobalSquads() {
+  const { data } = await supabase
+    .from('squads')
+    .select('id, name, xp, theme_color')
+    .order('xp', { ascending: false })
+    .limit(10);
+  topGlobalSquads = data || [];
+}
+
 async function fetchAuditLogs() {
   const { data } = await supabase
     .from('audit_logs')
@@ -1579,7 +1790,8 @@ async function loadActiveSquadData(squadId) {
     fetchSquadPosts(squadId),
     fetchSquadMembers(squadId),
     fetchSquadPolls(squadId),
-    fetchSquadGoals(squadId)
+    fetchSquadGoals(squadId),
+    fetchTopGlobalSquads()
   ]);
 }
 
