@@ -7,11 +7,16 @@ let userSquads = [];
 let activeSquad = null;
 let squadPosts = [];
 let squadMembers = [];
+let squadPolls = [];
+let squadGoals = [];
 
-// Modals & UI State
+// Active Vault Tab: 'feed' | 'polls' | 'goals' | 'settings'
+let activeVaultTab = 'feed';
+
+// Modals & Admin State
 let isModModalOpen = false;
 let isPrivacyModalOpen = false;
-let activeAdminTab = 'users'; // 'users' | 'logs'
+let activeAdminTab = 'users';
 let userSearchQuery = '';
 let allProfilesList = [];
 let auditLogsList = [];
@@ -20,7 +25,7 @@ let systemStats = { users: 0, squads: 0, posts: 0 };
 function formatPostContent(content) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return content.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-glow, #a855f7); text-decoration: underline;">${url}</a>`;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: ${activeSquad?.theme_color || '#a855f7'}; text-decoration: underline;">${url}</a>`;
   });
 }
 
@@ -78,7 +83,7 @@ function renderAuthSection() {
         <button type="submit">${isSignUpMode ? 'Sign Up' : 'Sign In'}</button>
       </form>
 
-      <div style="margin: 1.2rem 0; text-align: center; color: var(--muted); font-size: 0.85rem; position: relative;">
+      <div style="margin: 1.2rem 0; text-align: center; color: var(--muted); font-size: 0.85rem;">
         <span>OR</span>
       </div>
 
@@ -95,12 +100,8 @@ function renderAuthSection() {
       </div>
 
       <div style="margin-top: 1.2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: flex; justify-content: center; gap: 1.2rem;">
-        <a href="../" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">
-          ← Back to Hub
-        </a>
-        <a href="privacy.html" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">
-          Privacy Policy
-        </a>
+        <a href="../" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">← Back to Hub</a>
+        <a href="privacy.html" style="color: var(--muted); font-size: 0.85rem; text-decoration: underline;">Privacy Policy</a>
       </div>
     </div>
   `;
@@ -126,16 +127,16 @@ function renderDashboardSection() {
     `;
   }
 
-  const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
+  const theme = activeSquad?.theme_color || '#a855f7';
 
   return `
-    <div class="dashboard-container" style="max-width: 600px;">
+    <div class="dashboard-container" style="max-width: 680px;">
       <h2>Welcome, @${currentProfile.username}!</h2>
       <p style="color: var(--muted); text-align: center; margin-bottom: 1.5rem;">
         Select a squad or start a new one to unlock your shared vault.
       </p>
 
-      <!-- Squad Management -->
+      <!-- Squad Creation & Join -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
         <form id="create-squad-form" style="flex: 1; min-width: 200px;">
           <div class="input-group">
@@ -163,7 +164,7 @@ function renderDashboardSection() {
               <button 
                 class="btn-squad-select ${activeSquad?.id === s.id ? 'active-squad' : 'btn-secondary'}" 
                 data-squad-id="${s.id}" 
-                style="width:auto; padding: 0.4rem 0.8rem; margin:0;"
+                style="width:auto; padding: 0.4rem 0.9rem; margin:0; ${activeSquad?.id === s.id ? `background: ${s.theme_color || '#a855f7'}; border-color: ${s.theme_color || '#a855f7'};` : ''}"
               >
                 ${s.name}
               </button>
@@ -172,58 +173,227 @@ function renderDashboardSection() {
         </div>
       ` : '<p style="font-size:0.85rem; color: var(--muted); text-align:center;">You are not in any squads yet.</p>'}
 
-      <!-- Active Squad Vault -->
+      <!-- Active Squad Hub -->
       ${activeSquad ? `
-        <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-            <h3>${activeSquad.name} Vault</h3>
-            <span style="font-size:0.75rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:0.2rem 0.5rem; border-radius:4px;">
-              Invite Code: <strong>${activeSquad.invite_code}</strong>
-            </span>
-          </div>
-
-          <!-- Members List -->
-          <div style="margin-bottom: 1rem; font-size: 0.78rem; color: var(--muted);">
-            Members: ${squadMembers.length > 0 ? squadMembers.map(m => `@${m.profiles?.username || 'User'}`).join(', ') : '@' + currentProfile.username}
-          </div>
-
-          <!-- Post Input -->
-          <form id="post-form" style="margin-bottom: 1.5rem;">
-            <div class="input-group">
-              <input type="text" id="post-content" placeholder="Share a message or link with your squad..." required>
-            </div>
-            <button type="submit">Post to Vault</button>
-          </form>
-
-          <!-- Posts Feed -->
-          <div style="display:flex; flex-direction:column; gap:0.8rem; max-height:300px; overflow-y:auto;">
-            ${squadPosts.length > 0 ? squadPosts.map(p => `
-              <div style="background:rgba(10,14,26,0.5); padding:0.8rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
-                  <span style="font-size:0.75rem; color:var(--accent-glow);">
-                    @${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                  ${(isStaff || p.user_id === currentUser?.id) ? `
-                    <button class="delete-post-btn" data-post-id="${p.id}" data-author="${p.profiles?.username || 'user'}" style="background:none; border:none; color:#ff4757; font-size:0.75rem; cursor:pointer; padding:0;">Delete</button>
-                  ` : ''}
-                </div>
-                <div style="font-size:0.9rem; word-break: break-word;">${formatPostContent(p.content)}</div>
+        <div style="border-top: 2px solid ${theme}; padding-top: 1.2rem; margin-top: 1.2rem;">
+          <!-- Squad Banner Header -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 1rem; margin-bottom: 1.2rem;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap: 1rem; flex-wrap: wrap;">
+              <div>
+                <h3 style="margin: 0; font-size: 1.25rem; color: #fff;">${activeSquad.name}</h3>
+                <p style="margin: 0.3rem 0 0.6rem; font-size: 0.85rem; color: var(--muted);">
+                  ${activeSquad.description || 'Welcome to our shared squad vault!'}
+                </p>
               </div>
-            `).join('') : '<p style="font-size:0.85rem; color:var(--muted); text-align:center;">No posts in this vault yet.</p>'}
+              <button id="copy-invite-btn" data-code="${activeSquad.invite_code}" style="width: auto; margin: 0; font-size: 0.75rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); padding: 0.35rem 0.7rem; border-radius: 6px; color: #fff; cursor: pointer;">
+                📋 Code: <strong>${activeSquad.invite_code}</strong>
+              </button>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--muted); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem;">
+              👥 Members (${squadMembers.length || 1}): ${squadMembers.length > 0 ? squadMembers.map(m => `@${m.profiles?.username || 'User'}`).join(', ') : '@' + currentProfile.username}
+            </div>
           </div>
+
+          <!-- Vault Navigation Tabs -->
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.6rem;">
+            <button class="vault-tab-btn" data-tab="feed" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'feed' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'feed' ? theme : 'rgba(255,255,255,0.1)'};">
+              💬 Vault Feed (${squadPosts.length})
+            </button>
+            <button class="vault-tab-btn" data-tab="polls" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'polls' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'polls' ? theme : 'rgba(255,255,255,0.1)'};">
+              📊 Polls (${squadPolls.length})
+            </button>
+            <button class="vault-tab-btn" data-tab="goals" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'goals' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'goals' ? theme : 'rgba(255,255,255,0.1)'};">
+              ✅ Goals (${squadGoals.filter(g => g.is_completed).length}/${squadGoals.length})
+            </button>
+            <button class="vault-tab-btn" data-tab="settings" style="width:auto; margin:0; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: ${activeVaultTab === 'settings' ? theme : 'transparent'}; border: 1px solid ${activeVaultTab === 'settings' ? theme : 'rgba(255,255,255,0.1)'};">
+              ⚙️ Customize
+            </button>
+          </div>
+
+          <!-- TAB 1: VAULT FEED -->
+          ${activeVaultTab === 'feed' ? renderVaultFeedTab(theme) : ''}
+
+          <!-- TAB 2: POLLS -->
+          ${activeVaultTab === 'polls' ? renderVaultPollsTab(theme) : ''}
+
+          <!-- TAB 3: GOALS -->
+          ${activeVaultTab === 'goals' ? renderVaultGoalsTab(theme) : ''}
+
+          <!-- TAB 4: CUSTOMIZE SQUAD -->
+          ${activeVaultTab === 'settings' ? renderVaultSettingsTab(theme) : ''}
         </div>
       ` : ''}
 
       <!-- Footer Links -->
       <div style="margin-top: 2rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem; display: flex; justify-content: center; gap: 1.2rem;">
-        <a href="privacy.html" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">
-          Privacy Policy
-        </a>
-        <a href="#" id="open-user-data-btn" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">
-          Manage My Data
-        </a>
+        <a href="privacy.html" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">Privacy Policy</a>
+        <a href="#" id="open-user-data-btn" style="color: var(--muted); font-size: 0.8rem; text-decoration: underline;">Manage My Data</a>
       </div>
     </div>
+  `;
+}
+
+function renderVaultFeedTab(theme) {
+  const isStaff = currentProfile?.role === 'admin' || currentProfile?.role === 'mod';
+  const pinnedPosts = squadPosts.filter(p => p.is_pinned);
+  const regularPosts = squadPosts.filter(p => !p.is_pinned);
+
+  const renderPostCard = (p, isPinnedCard = false) => {
+    const reactions = p.reactions || {};
+    const emojis = ['🔥', '👍', '❤️', '😂'];
+
+    return `
+      <div style="background:${isPinnedCard ? 'rgba(168, 85, 247, 0.08)' : 'rgba(10,14,26,0.5)'}; padding:0.85rem; border-radius:8px; border:1px solid ${isPinnedCard ? theme : 'rgba(255,255,255,0.06)'};">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+          <span style="font-size:0.75rem; color:${theme}; font-weight:600;">
+            ${isPinnedCard ? '📌 PINNED • ' : ''}@${p.profiles?.username || 'Member'} • ${new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          </span>
+          <div style="display:flex; gap:0.6rem; align-items:center;">
+            <button class="pin-post-btn" data-post-id="${p.id}" data-pinned="${p.is_pinned}" style="background:none; border:none; color:var(--muted); font-size:0.72rem; cursor:pointer; padding:0; width:auto; margin:0;">
+              ${p.is_pinned ? 'Unpin' : 'Pin'}
+            </button>
+            ${(isStaff || p.user_id === currentUser?.id) ? `
+              <button class="delete-post-btn" data-post-id="${p.id}" data-author="${p.profiles?.username || 'user'}" style="background:none; border:none; color:#ff4757; font-size:0.72rem; cursor:pointer; padding:0; width:auto; margin:0;">Delete</button>
+            ` : ''}
+          </div>
+        </div>
+        <div style="font-size:0.92rem; word-break: break-word; margin-bottom: 0.6rem;">${formatPostContent(p.content)}</div>
+        
+        <!-- Reaction Bar -->
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+          ${emojis.map(emoji => {
+            const usersList = reactions[emoji] || [];
+            const hasReacted = usersList.includes(currentUser?.id);
+            return `
+              <button class="react-btn" data-post-id="${p.id}" data-emoji="${emoji}" style="width:auto; margin:0; padding: 2px 7px; font-size: 0.75rem; border-radius: 12px; background: ${hasReacted ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.04)'}; border: 1px solid ${hasReacted ? theme : 'rgba(255,255,255,0.08)'}; color: #fff; cursor: pointer;">
+                ${emoji} ${usersList.length > 0 ? usersList.length : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <form id="post-form" style="margin-bottom: 1.2rem; display: flex; gap: 0.5rem;">
+      <input type="text" id="post-content" placeholder="Share a message, drop a link, or post an update..." required style="flex: 1; margin: 0;">
+      <button type="submit" style="width: auto; margin: 0; padding: 0 1.2rem; background: ${theme};">Post</button>
+    </form>
+
+    ${pinnedPosts.length > 0 ? `
+      <div style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom: 1rem;">
+        ${pinnedPosts.map(p => renderPostCard(p, true)).join('')}
+      </div>
+    ` : ''}
+
+    <div style="display:flex; flex-direction:column; gap:0.8rem; max-height:340px; overflow-y:auto;">
+      ${regularPosts.length > 0 ? regularPosts.map(p => renderPostCard(p, false)).join('') : (pinnedPosts.length === 0 ? '<p style="font-size:0.85rem; color:var(--muted); text-align:center; padding: 1.5rem 0;">No posts in this vault yet. Start the conversation!</p>' : '')}
+    </div>
+  `;
+}
+
+function renderVaultPollsTab(theme) {
+  return `
+    <form id="create-poll-form" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); padding: 1rem; border-radius: 8px; margin-bottom: 1.2rem;">
+      <div class="input-group" style="margin-bottom: 0.6rem;">
+        <input type="text" id="poll-question" placeholder="Ask your squad a question..." required>
+      </div>
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.6rem;">
+        <input type="text" id="poll-opt-1" placeholder="Option 1" required style="flex: 1;">
+        <input type="text" id="poll-opt-2" placeholder="Option 2" required style="flex: 1;">
+        <input type="text" id="poll-opt-3" placeholder="Option 3 (optional)" style="flex: 1;">
+      </div>
+      <button type="submit" style="margin: 0; background: ${theme}; font-size: 0.85rem;">Launch Squad Poll</button>
+    </form>
+
+    <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 320px; overflow-y: auto;">
+      ${squadPolls.length > 0 ? squadPolls.map(poll => {
+        const totalVotes = poll.options.reduce((sum, opt) => sum + (opt.votes?.length || 0), 0);
+        return `
+          <div style="background: rgba(10,14,26,0.6); border: 1px solid rgba(255,255,255,0.08); padding: 1rem; border-radius: 8px;">
+            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.8rem;">📊 ${poll.question}</div>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              ${poll.options.map((opt, idx) => {
+                const count = opt.votes?.length || 0;
+                const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                const voted = (opt.votes || []).includes(currentUser?.id);
+                return `
+                  <button class="vote-poll-btn" data-poll-id="${poll.id}" data-opt-idx="${idx}" style="width: 100%; margin: 0; text-align: left; padding: 0.55rem 0.8rem; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid ${voted ? theme : 'rgba(255,255,255,0.1)'}; color: #fff; cursor: pointer; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: 0; left: 0; height: 100%; width: ${pct}%; background: ${theme}; opacity: 0.22; z-index: 0;"></div>
+                    <div style="position: relative; z-index: 1; display: flex; justify-content: space-between; font-size: 0.85rem;">
+                      <span>${voted ? '✓ ' : ''}${opt.text}</span>
+                      <span>${pct}% (${count})</span>
+                    </div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+            <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.5rem;">Total votes: ${totalVotes}</div>
+          </div>
+        `;
+      }).join('') : '<p style="font-size:0.85rem; color:var(--muted); text-align:center;">No polls yet. Create one above!</p>'}
+    </div>
+  `;
+}
+
+function renderVaultGoalsTab(theme) {
+  return `
+    <form id="create-goal-form" style="display: flex; gap: 0.5rem; margin-bottom: 1.2rem;">
+      <input type="text" id="goal-title" placeholder="Add a shared squad goal, game target, or to-do..." required style="flex: 1; margin: 0;">
+      <button type="submit" style="width: auto; margin: 0; padding: 0 1.1rem; background: ${theme};">Add Goal</button>
+    </form>
+
+    <div style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 320px; overflow-y: auto;">
+      ${squadGoals.length > 0 ? squadGoals.map(g => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(10,14,26,0.5); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <label style="display: flex; align-items: center; gap: 0.7rem; cursor: pointer; font-size: 0.9rem; text-decoration: ${g.is_completed ? 'line-through' : 'none'}; color: ${g.is_completed ? 'var(--muted)' : '#fff'};">
+            <input type="checkbox" class="toggle-goal-cb" data-goal-id="${g.id}" ${g.is_completed ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: ${theme};">
+            ${g.title}
+          </label>
+          <button class="delete-goal-btn" data-goal-id="${g.id}" style="width: auto; margin: 0; background: none; border: none; color: #ff4757; font-size: 0.75rem; cursor: pointer;">✕</button>
+        </div>
+      `).join('') : '<p style="font-size:0.85rem; color:var(--muted); text-align:center;">No squad goals yet. Add something to accomplish together!</p>'}
+    </div>
+  `;
+}
+
+function renderVaultSettingsTab(theme) {
+  const colors = [
+    { name: 'Neon Purple', hex: '#a855f7' },
+    { name: 'Cyber Blue', hex: '#3b82f6' },
+    { name: 'Emerald Green', hex: '#10b981' },
+    { name: 'Crimson Red', hex: '#ef4444' },
+    { name: 'Solar Gold', hex: '#f59e0b' }
+  ];
+
+  return `
+    <form id="customize-squad-form" style="display: flex; flex-direction: column; gap: 1rem;">
+      <div class="input-group" style="margin: 0;">
+        <label>Squad Name</label>
+        <input type="text" id="edit-squad-name" value="${activeSquad.name}" required>
+      </div>
+
+      <div class="input-group" style="margin: 0;">
+        <label>Squad Motto / Description</label>
+        <input type="text" id="edit-squad-desc" value="${activeSquad.description || ''}" placeholder="What is this squad about?">
+      </div>
+
+      <div>
+        <label style="font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 0.5rem;">Vault Accent Theme</label>
+        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+          ${colors.map(c => `
+            <button type="button" class="theme-swatch-btn" data-color="${c.hex}" style="width: auto; margin: 0; padding: 0.4rem 0.8rem; font-size: 0.78rem; border-radius: 6px; background: rgba(255,255,255,0.05); border: 2px solid ${theme === c.hex ? c.hex : 'transparent'}; color: #fff; display: flex; align-items: center; gap: 0.4rem;">
+              <span style="width: 12px; height: 12px; border-radius: 50%; background: ${c.hex}; display: inline-block;"></span>
+              ${c.name}
+            </button>
+          `).join('')}
+        </div>
+        <input type="hidden" id="selected-theme-color" value="${theme}">
+      </div>
+
+      <button type="submit" style="background: ${theme}; margin-top: 0.5rem;">Save Squad Customization</button>
+    </form>
   `;
 }
 
@@ -233,7 +403,7 @@ function renderUserDataModal() {
       <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 450px; border-radius: 12px; padding: 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.8rem; margin-bottom: 1rem;">
           <h3 style="margin: 0; font-size: 1.05rem;">Privacy & Data Controls</h3>
-          <button id="close-user-data-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;">✕</button>
+          <button id="close-user-data-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; width: auto; margin: 0;">✕</button>
         </div>
 
         <p style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem;">
@@ -271,10 +441,8 @@ function renderModModal(isAdmin) {
       <div style="background: #0d111a; border: 1px solid var(--border); width: 100%; max-width: 650px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
         
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">
-            🛡️ Staff Control Center
-          </h3>
-          <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer;">✕</button>
+          <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">🛡️ Staff Control Center</h3>
+          <button id="close-mod-modal-btn" style="background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; width: auto; margin: 0;">✕</button>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1rem; text-align: center;">
@@ -293,11 +461,11 @@ function renderModModal(isAdmin) {
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-          <button id="modal-tab-users" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+          <button id="modal-tab-users" class="${activeAdminTab === 'users' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; width: auto; margin: 0;">
             Users & Roles
           </button>
           ${isAdmin ? `
-            <button id="modal-tab-logs" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">
+            <button id="modal-tab-logs" class="${activeAdminTab === 'logs' ? 'btn-squad-select active-squad' : 'btn-secondary'}" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; width: auto; margin: 0;">
               Audit Logs
             </button>
           ` : ''}
@@ -328,13 +496,13 @@ function renderModModal(isAdmin) {
                     <td style="padding:0.4rem; text-align:right; display:flex; gap:0.4rem; justify-content:flex-end;">
                       ${isAdmin && u.id !== currentUser.id ? `
                         ${u.role === 'mod' ? `
-                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem;">Demote</button>
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="user" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; width: auto; margin: 0;">Demote</button>
                         ` : `
-                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#fff;">Make Mod</button>
+                          <button class="role-btn btn-secondary" data-id="${u.id}" data-role="mod" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#fff; width: auto; margin: 0;">Make Mod</button>
                         `}
                       ` : ''}
                       ${(isAdmin || currentProfile?.role === 'mod') && u.id !== currentUser.id ? `
-                        <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer;">Remove</button>
+                        <button class="remove-user-btn" data-id="${u.id}" data-name="${u.username}" style="padding:0.2rem 0.4rem; font-size:0.7rem; background:#ff4757; color:#fff; border:none; border-radius:4px; cursor:pointer; width: auto; margin: 0;">Remove</button>
                       ` : ''}
                     </td>
                   </tr>
@@ -359,6 +527,171 @@ function renderModModal(isAdmin) {
 }
 
 function attachEventListeners() {
+  // Vault Tab Switching
+  document.querySelectorAll('.vault-tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      activeVaultTab = e.currentTarget.getAttribute('data-tab');
+      renderApp();
+    });
+  });
+
+  // Copy Invite Code
+  const copyInviteBtn = document.getElementById('copy-invite-btn');
+  if (copyInviteBtn) {
+    copyInviteBtn.addEventListener('click', () => {
+      const code = copyInviteBtn.getAttribute('data-code');
+      navigator.clipboard.writeText(code);
+      copyInviteBtn.innerHTML = '✅ Copied!';
+      setTimeout(() => { copyInviteBtn.innerHTML = `📋 Code: <strong>${code}</strong>`; }, 1500);
+    });
+  }
+
+  // Post Reactions
+  document.querySelectorAll('.react-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const postId = e.currentTarget.getAttribute('data-post-id');
+      const emoji = e.currentTarget.getAttribute('data-emoji');
+      const post = squadPosts.find(p => p.id === postId);
+      if (!post) return;
+
+      const reactions = { ...(post.reactions || {}) };
+      const list = reactions[emoji] || [];
+      if (list.includes(currentUser.id)) {
+        reactions[emoji] = list.filter(id => id !== currentUser.id);
+      } else {
+        reactions[emoji] = [...list, currentUser.id];
+      }
+
+      await supabase.from('posts').update({ reactions }).eq('id', postId);
+      await fetchSquadPosts(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Pin / Unpin Posts
+  document.querySelectorAll('.pin-post-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const postId = e.currentTarget.getAttribute('data-post-id');
+      const currentlyPinned = e.currentTarget.getAttribute('data-pinned') === 'true';
+      await supabase.from('posts').update({ is_pinned: !currentlyPinned }).eq('id', postId);
+      await fetchSquadPosts(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Create Poll
+  const createPollForm = document.getElementById('create-poll-form');
+  if (createPollForm) {
+    createPollForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const question = document.getElementById('poll-question').value.trim();
+      const opt1 = document.getElementById('poll-opt-1').value.trim();
+      const opt2 = document.getElementById('poll-opt-2').value.trim();
+      const opt3 = document.getElementById('poll-opt-3').value.trim();
+
+      const options = [
+        { text: opt1, votes: [] },
+        { text: opt2, votes: [] }
+      ];
+      if (opt3) options.push({ text: opt3, votes: [] });
+
+      await supabase.from('squad_polls').insert({
+        squad_id: activeSquad.id,
+        created_by: currentUser.id,
+        question,
+        options
+      });
+      await fetchSquadPolls(activeSquad.id);
+      renderApp();
+    });
+  }
+
+  // Vote on Poll
+  document.querySelectorAll('.vote-poll-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const pollId = e.currentTarget.getAttribute('data-poll-id');
+      const optIdx = parseInt(e.currentTarget.getAttribute('data-opt-idx'), 10);
+      const poll = squadPolls.find(p => p.id === pollId);
+      if (!poll) return;
+
+      const updatedOptions = poll.options.map((opt, idx) => {
+        const filteredVotes = (opt.votes || []).filter(id => id !== currentUser.id);
+        if (idx === optIdx) {
+          return { ...opt, votes: [...filteredVotes, currentUser.id] };
+        }
+        return { ...opt, votes: filteredVotes };
+      });
+
+      await supabase.from('squad_polls').update({ options: updatedOptions }).eq('id', pollId);
+      await fetchSquadPolls(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Create Goal
+  const createGoalForm = document.getElementById('create-goal-form');
+  if (createGoalForm) {
+    createGoalForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('goal-title').value.trim();
+      if (!title) return;
+      await supabase.from('squad_goals').insert({
+        squad_id: activeSquad.id,
+        title,
+        created_by: currentUser.id
+      });
+      await fetchSquadGoals(activeSquad.id);
+      renderApp();
+    });
+  }
+
+  // Toggle Goal Completion
+  document.querySelectorAll('.toggle-goal-cb').forEach(cb => {
+    cb.addEventListener('change', async (e) => {
+      const goalId = e.target.getAttribute('data-goal-id');
+      await supabase.from('squad_goals').update({ is_completed: e.target.checked }).eq('id', goalId);
+      await fetchSquadGoals(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Delete Goal
+  document.querySelectorAll('.delete-goal-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const goalId = e.target.getAttribute('data-goal-id');
+      await supabase.from('squad_goals').delete().eq('id', goalId);
+      await fetchSquadGoals(activeSquad.id);
+      renderApp();
+    });
+  });
+
+  // Theme Swatches & Squad Customization
+  document.querySelectorAll('.theme-swatch-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const color = e.currentTarget.getAttribute('data-color');
+      document.getElementById('selected-theme-color').value = color;
+      document.querySelectorAll('.theme-swatch-btn').forEach(b => b.style.borderColor = 'transparent');
+      e.currentTarget.style.borderColor = color;
+    });
+  });
+
+  const customizeSquadForm = document.getElementById('customize-squad-form');
+  if (customizeSquadForm) {
+    customizeSquadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('edit-squad-name').value.trim();
+      const description = document.getElementById('edit-squad-desc').value.trim();
+      const theme_color = document.getElementById('selected-theme-color').value;
+
+      await supabase.from('squads').update({ name, description, theme_color }).eq('id', activeSquad.id);
+      activeSquad = { ...activeSquad, name, description, theme_color };
+      userSquads = userSquads.map(s => s.id === activeSquad.id ? activeSquad : s);
+      activeVaultTab = 'feed';
+      renderApp();
+    });
+  }
+
+  // Standard Auth & Modal Listeners
   const toggleBtn = document.getElementById("toggle-auth-btn");
   const authForm = document.getElementById("auth-form");
   const githubBtn = document.getElementById("github-login-btn");
@@ -383,7 +716,6 @@ function attachEventListeners() {
   const modalTabLogs = document.getElementById("modal-tab-logs");
   const userSearchInput = document.getElementById("mod-user-search");
 
-  // User Data Modal Listeners
   if (openUserDataBtn) {
     openUserDataBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -445,7 +777,6 @@ function attachEventListeners() {
     });
   }
 
-  // Staff Modal Listeners
   if (openModModalBtn) {
     openModModalBtn.addEventListener("click", async () => {
       isModModalOpen = true;
@@ -561,6 +892,7 @@ function attachEventListeners() {
       const { data: squad, error } = await supabase.from('squads').insert({ name, invite_code, created_by: currentUser.id }).select().single();
       if (!error && squad) {
         await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id });
+        activeSquad = squad;
         await loadUserData();
       }
     });
@@ -570,10 +902,11 @@ function attachEventListeners() {
     joinSquadForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const code = document.getElementById("invite-code").value.trim().toUpperCase();
-      const { data: squad } = await supabase.from('squads').select('id').eq('invite_code', code).single();
+      const { data: squad } = await supabase.from('squads').select('*').eq('invite_code', code).single();
 
       if (squad) {
         await supabase.from('squad_members').insert({ squad_id: squad.id, user_id: currentUser.id });
+        activeSquad = squad;
         await loadUserData();
       } else {
         document.getElementById("squad-error").innerText = "Invalid invite code.";
@@ -588,9 +921,7 @@ function attachEventListeners() {
       if (!content || !activeSquad) return;
 
       const { error } = await supabase.from('posts').insert({ squad_id: activeSquad.id, user_id: currentUser.id, content });
-      if (error) {
-        console.error("Post creation error:", error.message);
-      } else {
+      if (!error) {
         document.getElementById("post-content").value = "";
         await fetchSquadPosts(activeSquad.id);
         renderApp();
@@ -647,8 +978,8 @@ function attachEventListeners() {
     btn.addEventListener('click', async (e) => {
       const squadId = e.target.getAttribute('data-squad-id');
       activeSquad = userSquads.find(s => s.id === squadId);
-      await fetchSquadPosts(squadId);
-      await fetchSquadMembers(squadId);
+      activeVaultTab = 'feed';
+      await loadActiveSquadData(squadId);
       renderApp();
     });
   });
@@ -662,6 +993,8 @@ function attachEventListeners() {
       activeSquad = null;
       squadPosts = [];
       squadMembers = [];
+      squadPolls = [];
+      squadGoals = [];
       isModModalOpen = false;
       isPrivacyModalOpen = false;
       renderApp();
@@ -714,7 +1047,6 @@ async function fetchSquadMembers(squadId) {
 
 async function fetchSquadPosts(squadId) {
   if (!squadId) return;
-
   const { data, error } = await supabase
     .from('posts')
     .select('*, profiles(username)')
@@ -733,6 +1065,33 @@ async function fetchSquadPosts(squadId) {
   }
 }
 
+async function fetchSquadPolls(squadId) {
+  const { data } = await supabase
+    .from('squad_polls')
+    .select('*')
+    .eq('squad_id', squadId)
+    .order('created_at', { ascending: false });
+  squadPolls = data || [];
+}
+
+async function fetchSquadGoals(squadId) {
+  const { data } = await supabase
+    .from('squad_goals')
+    .select('*')
+    .eq('squad_id', squadId)
+    .order('created_at', { ascending: true });
+  squadGoals = data || [];
+}
+
+async function loadActiveSquadData(squadId) {
+  await Promise.all([
+    fetchSquadPosts(squadId),
+    fetchSquadMembers(squadId),
+    fetchSquadPolls(squadId),
+    fetchSquadGoals(squadId)
+  ]);
+}
+
 async function loadUserData() {
   if (!currentUser) return;
 
@@ -747,8 +1106,9 @@ async function loadUserData() {
       userSquads = squads || [];
       if (!activeSquad && userSquads.length > 0) {
         activeSquad = userSquads[0];
-        await fetchSquadPosts(activeSquad.id);
-        await fetchSquadMembers(activeSquad.id);
+      }
+      if (activeSquad) {
+        await loadActiveSquadData(activeSquad.id);
       }
     }
   }
